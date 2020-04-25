@@ -1,0 +1,9 @@
+name = "DynamicScheduling"
+uuid = "33013ebf-705a-4d48-964e-de97b2670ee5"
+authors = ["biggsbenjamin <bb2515@ic.ac.uk>"]
+version = "0.1.0"
+
+[deps]
+InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+SSATools = "028dadce-91a2-4ca7-bdd6-b2c6791f885f"
