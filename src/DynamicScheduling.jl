@@ -383,6 +383,32 @@ function add_forks!(ec::ElasticCircuit, inst_cnt::counter)
 end
 
 function add_sinks!(ec::ElasticCircuit, inst_cnt::counter)
+
+    for (cmpt_idx, cmpt) in enumerate(ec.components)
+        if isa(cmpt, branch)
+            sink_idx = 0
+            empty_branch_cnt=0
+            if ec.components[cmpt_idx].branchT == 0
+                empty_branch_cnt+=1
+                #add a sink to the branch
+                push!(ec.components, sink(:sink_, cmpt.bbID, inst_cnt.val+1, [cmpt_idx]))
+                inc(inst_cnt)
+                sink_idx = length(ec.components)
+                ec.components[cmpt_idx].branchT = sink_idx
+            end
+            if ec.components[cmpt_idx].branchF == 0
+                empty_branch_cnt+=1
+                push!(ec.components, sink(:sink_, cmpt.bbID, inst_cnt.val+1, [cmpt_idx]))
+                inc(inst_cnt)
+                sink_idx = length(ec.components)
+                ec.components[cmpt_idx].branchF = sink_idx
+            end
+
+            if empty_branch_cnt >= 2
+                error("branch has no successors")
+            end
+        end
+    end
     return ec, inst_cnt
 end
 
@@ -524,7 +550,7 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
     ec, inst_cnt = add_controls!(ec, inst_cnt)
 
     ec, inst_cnt = add_forks!(ec, inst_cnt)
-    #ec, inst_cnt = add_sinks!(ec, inst_cnt)
+    ec, inst_cnt = add_sinks!(ec, inst_cnt)
 
     #TODO some final validation before returning the ec
     return ec
