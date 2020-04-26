@@ -351,8 +351,34 @@ end
 
 #adds the forks
 function add_forks!(ec::ElasticCircuit, inst_cnt::counter)
-    for cmpt in ec.components
-        if
+    no_fork_list = [branch, sink, exit_ctrl, fork] #component types with allowable multiple successors OR should not be forked from
+    for (cmpt_idx, cmpt) in enumerate(ec.components)
+        if typeof(cmpt) ∉ no_fork_list && length(cmpt.succComps) > 1
+            #println(cmpt)
+            #start the forking
+            fork_succs = []
+            for succ in cmpt.succComps[1:end] #WARNING not sure why this happend, maybe because list is edited as its traversed?
+                #check that its valid (comes from same bb)
+                if cmpt.bbID != ec.components[succ].bbID && ec.components[succ].bbID != 0
+                    error("between block linking should not occur at this point")
+                end
+                #add succs to fork succs
+                push!(fork_succs, succ)
+                #remove succ from cmpt succ
+                filter!(rem->rem != succ, cmpt.succComps)
+                #remove cmpt from succ preds
+                filter!(rem->rem!=cmpt_idx, ec.components[succ].predComps)
+            end
+
+            push!(ec.components, fork(:fork_, cmpt.bbID, inst_cnt.val+1, cmpt.output1Type, cmpt.output1Type, [cmpt_idx], fork_succs))
+            inc(inst_cnt)
+            fork_idx = length(ec.components)
+            #add fork to cmpt succ
+            union!(cmpt.succComps, fork_idx)
+            [union!(ec.components[succ].predComps, fork_idx) for succ in fork_succs] # add the fork as a pred to the og cmpt succs
+            #println(cmpt)
+        end
+    end
     return ec, inst_cnt
 end
 
@@ -547,6 +573,18 @@ function printDOT_cmpt(cmpt::branch)
     println(dot_str)
 end
 
+function printDOT_cmpt(cmpt::fork)
+    dot_str = ""
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Fork\", "
+    dot_str*= "bbID = $(cmpt.bbID), in = \"in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8))\", "
+    dot_str*= "out = \""
+    for (op_num, op) in enumerate(cmpt.succComps)
+        dot_str*= "out$op_num:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8)) "
+    end
+    dot_str*= "\"];"
+    println(dot_str)
+end
+
 function printDOT_cmpt(cmpt::merge_ctrl)
     dot_str = ""
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Merge\", "
@@ -650,6 +688,25 @@ function printDOT_link(cmpt_idx::Int, cmpt::branch, cmpts::Vector{AbstractElasti
         dot_str*= "\"$(string(cmpts[br].name, cmpts[br].instNum))\" "
 
         idx_arr = findall(isequal(cmpt_idx), cmpts[br].predComps) #finds the refs to the current component in the target component
+        if length(idx_arr) > 1
+            error("Connecting twice not currently supported")
+        end
+
+        dot_str*= "[color = \"$(cmpt.name == :branchC_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];"
+        println(dot_str)
+    end
+end
+
+function printDOT_link(cmpt_idx::Int, cmpt::fork, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+    for succ in cmpt.succComps #TODO - may need to sort out adding succ vec for branches, hopefully not
+        dot_str = ""
+        for n in 1:tab_num
+            dot_str *= "\t"
+        end
+        dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+        dot_str*= "\"$(string(cmpts[succ].name, cmpts[succ].instNum))\" "
+
+        idx_arr = findall(isequal(cmpt_idx), cmpts[succ].predComps) #finds the refs to the current component in the target component
         if length(idx_arr) > 1
             error("Connecting twice not currently supported")
         end

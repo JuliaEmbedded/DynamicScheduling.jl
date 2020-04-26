@@ -19,6 +19,7 @@ end
 
 #placeholders - component will always be replaced or removed
 struct placeholder <: AbstractElasticComponent
+    #name::String #just take the type
     name::Symbol
     bbID::Int
     predComps::Vector{Int}
@@ -44,10 +45,12 @@ end
 struct fork <: AbstractConnector #maybe make mutable?
     name::Symbol
     bbID::Int #basic block number
-    #name::String #just take the type
     instNum::Int #the number of components of this type (prevents naming conflicts)
 
-    predComps::Vector{Int} #input components (array positions)
+    input1Type::DataType
+    output1Type::DataType #more than one output but they'll all be the same type
+
+    predComps::Vector{Int} #input components (array positions) - should only be one
     succComps::Vector{Int} #output components (array positions)
 end
 
