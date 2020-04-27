@@ -705,7 +705,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::exit_ctrl, cmpts::Vector{AbstractEla
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::branch, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
-    for br in [cmpt.branchT, cmpt.branchF] #TODO - may need to sort out adding succ vec for branches, hopefully not
+    for (out_num, br) in enumerate([cmpt.branchT, cmpt.branchF]) #TODO - may need to sort out adding succ vec for branches, hopefully not
         dot_str = ""
         for n in 1:tab_num
             dot_str *= "\t"
@@ -718,13 +718,20 @@ function printDOT_link(cmpt_idx::Int, cmpt::branch, cmpts::Vector{AbstractElasti
             error("Connecting twice not currently supported")
         end
 
-        dot_str*= "[color = \"$(cmpt.name == :branchC_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];"
+        colour = "red"
+        if cmpt.name == :branchC_
+            colour = "gold3"
+        elseif cmpt.name == :branch_
+            colour = "blue"
+        end
+
+        dot_str*= "[color = \"$(colour)\", minlen = 3, from = \"out$(out_num)\", to = \"in$(idx_arr[1])\"];" #minlen seems constant
         println(dot_str)
     end
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::fork, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
-    for succ in cmpt.succComps #TODO - may need to sort out adding succ vec for branches, hopefully not
+    for (out_num, succ) in enumerate(cmpt.succComps)
         dot_str = ""
         for n in 1:tab_num
             dot_str *= "\t"
@@ -737,7 +744,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::fork, cmpts::Vector{AbstractElasticC
             error("Connecting twice not currently supported")
         end
 
-        dot_str*= "[color = \"$(cmpt.name == :branchC_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];"
+        dot_str*= "[color = \"$(cmpt.name == :branchC_ ? "gold3" : "red")\", from = \"out$(out_num)\", to = \"in$(idx_arr[1])\"];"
         println(dot_str)
     end
 end
