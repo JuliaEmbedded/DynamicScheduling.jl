@@ -1,0 +1,24 @@
+Digraph G {
+    splines=spline;
+//DHLS version: 0.1.1" [shape = "none" pos = "20,20!"]
+        "mul_1" [type = "Operator", bbID = 1, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
+        "mul_2" [type = "Operator", bbID = 1, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
+        "ret_3" [type = "Operator", bbID = 1, op = "ret_op", in = "in1:32", out = "out1:32", delay = 0.0, latency = 0, II = 1];
+        "a4" [type = "Entry", bbID = 1, in = "in1:32", out = "out1:32"];
+        "b5" [type = "Entry", bbID = 1, in = "in1:32", out = "out1:32"];
+        "c6" [type = "Entry", bbID = 1, in = "in1:32", out = "out1:32"];
+        "end_7" [type = "Exit", bbID = 0, in = "in1:32 ", out = "out1:32"];
+        "start_8" [type = "Entry", control = "true", bbID = 1, in = "in1:0", out = "out1:0"];
+        "sink_9" [type = "Sink", bbID = 0, in = "in1:0"];
+    subgraph cluster_0 {
+    color = "darkgreen";
+        label = "block1";
+        "mul_1" -> "mul_2" [color = "red", from = "out1", to = "in1"];
+        "mul_2" -> "ret_3" [color = "red", from = "out1", to = "in1"];
+        "ret_3" -> "end_7" [color = "red", from = "out1", to = "in1"];
+        "a4" -> "mul_1" [color = "red", from = "out1", to = "in1"];
+        "b5" -> "mul_1" [color = "red", from = "out1", to = "in2"];
+        "c6" -> "mul_2" [color = "red", from = "out1", to = "in2"];
+        "start_8" -> "sink_9" [color = "gold3", from = "out1", to = "in1"];
+    }
+}
