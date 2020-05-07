@@ -6,7 +6,7 @@ abstract type AbstractControl <: AbstractElasticComponent end
 abstract type AbstractConnector <: AbstractElasticComponent end
 #operator abstracts
 abstract type AbstractMultiplier <: AbstractOperator end
-abstract type AbstractAdder <: AbstractOperator end
+#abstract type AbstractAdder <: AbstractOperator end
 abstract type AbstractSub <: AbstractOperator end
 abstract type AbstractCompare <: AbstractOperator end
 

@@ -7,6 +7,7 @@ module DynamicScheduling
 ################ using ##############################
 using SSATools
 using Core.Compiler
+using InteractiveUtils
 
 ################ type includes ######################
 include("EC_types.jl")
@@ -25,6 +26,7 @@ end
 counter() = counter(0)
 function inc(ctr::counter)
     ctr.val+=1
+    return ctr.val
 end
 
 function rst(ctr::counter)
@@ -35,7 +37,21 @@ end
 #include("EC_DOT_printer.jl") #TODO workout the dependency/sub-module julia way of doing this
 
 ################ EC helper functions ################
-function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cnt::counter, arg_len::Int, node_len::Int, cnsts::Vector{ECconstant}) #TODO add to Base.convert
+function get_concrete_types(t::DataType, ret_arr::Array{DataType, 1})
+        t_arr = InteractiveUtils.subtypes(t)
+
+        if length(t_arr) == 0
+                push!(ret_arr, t)
+        else
+                ret = vcat([get_concrete_types(type) for type in t_arr]...)
+                append!(ret_arr, ret)
+        end
+        return ret_arr
+end
+
+get_concrete_types(t::DataType) = get_concrete_types(t, DataType[])
+
+function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cntrs::Dict, arg_len::Int, node_len::Int, cnsts::Vector{ECconstant}) #TODO add to Base.convert
     predComps = Int[]
     input1Type=nothing
     input2Type=nothing
@@ -53,27 +69,26 @@ function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cnt::coun
         elseif isa(val, Core.SlotNumber)
             push!(predComps, (val.id-1 + node_len))
         else
-            #TODO handle constant values - best way might be to assume const are after args and return some sort of flag?
-            #error("unsupported constant values")
             cnst_idx =  node_len + arg_len + length(cnsts)+1
-            push!(cnsts, ECconstant(:cst_, node.bb, 42, val, type, Int[0], Int[node_idx]))
+            push!(cnsts, ECconstant(:cst_, node.bb, inc(inst_cntrs[ECconstant]), val, type, Int[0], Int[node_idx]))
             push!(predComps, cnst_idx)
+            inc(inst_cntrs[Any])
         end
     end
 
     if node.op.name == :mul_int
-        return mul_int(:mul_, node.bb, inst_cnt.val+1, input1Type, input2Type, node.type, 0.000, 4, 1, predComps, copy(node.dataSuccs)), cnsts
+        return mul_int(:mul_, node.bb, inc(inst_cntrs[mul_int]), input1Type, input2Type, node.type, 0.000, 4, 1, predComps, copy(node.dataSuccs)), cnsts
     elseif node.op.name == :sub_int
-        return sub_int(:sub_, node.bb, inst_cnt.val+1, input1Type, input2Type, node.type, 1.693, 0, 1, predComps, copy(node.dataSuccs)), cnsts
+        return sub_int(:sub_, node.bb, inc(inst_cntrs[sub_int]), input1Type, input2Type, node.type, 1.693, 0, 1, predComps, copy(node.dataSuccs)), cnsts
     elseif node.op.name == :slt_int
-        return slt_int(:icmp_, node.bb, inst_cnt.val+1, input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
+        return slt_int(:icmp_, node.bb, inc(inst_cntrs[slt_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
     else
         error("Unsupported operator: ", string(node.op.name))
     end
 end
 
 #adds the control infrastructure
-function add_controls!(ec::ElasticCircuit, inst_cnt::counter)
+function add_controls!(ec::ElasticCircuit, inst_cntrs::Dict)
     #looking at the ec c++ lib, they add the control information to bbnodes as well, from the dot graph printer this info is not used - redundant?
     #TODO check if this information is worth including in bbnodes - for now, not worth it since it requires type change of vector
 
@@ -82,8 +97,8 @@ function add_controls!(ec::ElasticCircuit, inst_cnt::counter)
     #add end component - attaches to all return components, update in future
     end_inputTypes = DataType[]
     end_predComps = Int[]
-    push!(ec.components, exit_ctrl(:end_, 0, inst_cnt.val+1, end_inputTypes, end_predComps, [0])) #assuming succ doesnt matter atm
-    inc(inst_cnt) #update the overall instance counter
+    push!(ec.components, exit_ctrl(:end_, 0, inc(inst_cntrs[exit_ctrl]), end_inputTypes, end_predComps, [0])) #assuming succ doesnt matter atm
+    inc(inst_cntrs[Any]) #update the overall instance counter
     end_ctrl_idx = length(ec.components)
 
     for (cmpt_idx, cmpt) in enumerate(ec.components)
@@ -98,7 +113,7 @@ function add_controls!(ec::ElasticCircuit, inst_cnt::counter)
     for (bb_num, bb) in enumerate(ec.bbnodes)
         if bb_num == 1
             #add the start components - should only be in bb1
-            push!(ec.components, entry(:start_, 1, inst_cnt.val+1, true, Core.Any, Int[0], [])) #assuming succ doesnt matter atm
+            push!(ec.components, entry(:start_, 1, inc(inst_cntrs[entry]), true, Core.Any, Int[0], [])) #assuming succ doesnt matter atm
         else
             #check the predecessors
             if length(bb["ctrlPreds"]) <= 0
@@ -119,10 +134,10 @@ function add_controls!(ec::ElasticCircuit, inst_cnt::counter)
                     end
                 end
             end
-            push!(ec.components, merge_ctrl(:phiC_, bb_num, inst_cnt.val+1, inputTypes, Core.Any, dataPreds, [], 0.166))
+            push!(ec.components, merge_ctrl(:phiC_, bb_num, inc(inst_cntrs[merge_ctrl]), inputTypes, Core.Any, dataPreds, [], 0.166))
         end
 
-        inc(inst_cnt) #update the overall instance counter
+        inc(inst_cntrs[Any]) #update the overall instance counter
         ctrl_idx = length(ec.components)
 
         #TODO hook up control flow to branches, sels, memory components, etc...
@@ -144,16 +159,16 @@ function add_controls!(ec::ElasticCircuit, inst_cnt::counter)
 
         else #no branching for this bb
             #llvm has implicit return - TODO check if julia tir has the same issue, I don't think so? but maybe if nothing returned
-            push!(ec.components, sink(:sink_, 0, inst_cnt.val+1, Int[ctrl_idx]))
-            inc(inst_cnt)
+            push!(ec.components, sink(:sink_, 0, inc(inst_cntrs[sink]), Int[ctrl_idx]))
+            inc(inst_cntrs[Any])
             push!(ec.components[ctrl_idx].succComps, lastindex(ec.components)) #correct successor of the current control node
         end
         #phi node creation here? no
     end
-    return ec, inst_cnt
+    return ec, inst_cntrs
 end
 
-function add_phis!(ec::ElasticCircuit, inst_cnt::counter)
+function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict)
     #TODO handle the mess that is IR phi nodes
     #live-ness analysis
     bb_defs = [copy(bb["stmt_idx"]) for bb in ec.bbnodes]
@@ -197,10 +212,10 @@ function add_phis!(ec::ElasticCircuit, inst_cnt::counter)
     phinodes = [[], []]
     for (bbl_num, bbl) in enumerate(bb_live_ins)
         for stmt in bbl
-            phi_n = merge_ctrl(:phi_n, bbl_num, inst_cnt.val+1, [ec.components[stmt].output1Type], ec.components[stmt].output1Type, [stmt], [], 0.000)
+            phi_n = merge_ctrl(:phi_n, bbl_num, inc(inst_cntrs[merge_ctrl]), [ec.components[stmt].output1Type], ec.components[stmt].output1Type, [stmt], [], 0.000)
             push!(phinodes[2], phi_n)
             push!(ec.components, phi_n) #works like you would expect, both ref the one instance
-            inc(inst_cnt)
+            inc(inst_cntrs[Any])
 
             phi_idx = length(ec.components)
             push!(ec.components[stmt].succComps, phi_idx)
@@ -288,10 +303,10 @@ function add_phis!(ec::ElasticCircuit, inst_cnt::counter)
     for (phi_idx, phi) in zip(phinodes[1], phinodes[2])
         println(phi_idx, " - ", phi)
     end=#
-    return ec, inst_cnt
+    return ec, inst_cntrs
 end
 
-function add_branches!(ec::ElasticCircuit, inst_cnt::counter)
+function add_branches!(ec::ElasticCircuit, inst_cntrs::Dict)
     for (bb_num, bb) in enumerate(ec.bbnodes)
         goto_cmpt = ec.components[bb["stmt_idx"][end]]
         if length(bb["ctrlSuccs"]) <= 0 #has not bbs afterwards so can't branch from here (must have a return)
@@ -342,18 +357,18 @@ function add_branches!(ec::ElasticCircuit, inst_cnt::counter)
                     end
                 end
 
-                push!(ec.components, branch(:branch_, bb_num, inst_cnt.val+1, input1Type, input1Type, input1Type, Int[cmpt_idx, sel_line_pred], branchT, branchF))
-                inc(inst_cnt)
+                push!(ec.components, branch(:branch_, bb_num, inc(inst_cntrs[branch]), input1Type, input1Type, input1Type, Int[cmpt_idx, sel_line_pred], branchT, branchF))
+                inc(inst_cntrs[Any])
                 #update sel line succ
                 union!(ec.components[sel_line_pred].succComps, [length(ec.components)])
             end
         end
     end
-    return ec, inst_cnt
+    return ec, inst_cntrs
 end
 
 #adds the forks
-function add_forks!(ec::ElasticCircuit, inst_cnt::counter)
+function add_forks!(ec::ElasticCircuit, inst_cntrs::Dict)
     no_fork_list = [branch, sink, exit_ctrl, fork] #component types with allowable multiple successors OR should not be forked from
     for (cmpt_idx, cmpt) in enumerate(ec.components)
         if typeof(cmpt) ∉ no_fork_list && length(cmpt.succComps) > 1
@@ -373,8 +388,8 @@ function add_forks!(ec::ElasticCircuit, inst_cnt::counter)
                 filter!(rem->rem!=cmpt_idx, ec.components[succ].predComps)
             end
 
-            push!(ec.components, fork(:fork_, cmpt.bbID, inst_cnt.val+1, cmpt.output1Type, cmpt.output1Type, [cmpt_idx], fork_succs))
-            inc(inst_cnt)
+            push!(ec.components, fork(:fork_, cmpt.bbID, inc(inst_cntrs[fork]), cmpt.output1Type, cmpt.output1Type, [cmpt_idx], fork_succs))
+            inc(inst_cntrs[Any])
             fork_idx = length(ec.components)
             #add fork to cmpt succ
             union!(cmpt.succComps, fork_idx)
@@ -382,10 +397,10 @@ function add_forks!(ec::ElasticCircuit, inst_cnt::counter)
             #println(cmpt)
         end
     end
-    return ec, inst_cnt
+    return ec, inst_cntrs
 end
 
-function add_sinks!(ec::ElasticCircuit, inst_cnt::counter)
+function add_sinks!(ec::ElasticCircuit, inst_cntrs::Dict)
 
     for (cmpt_idx, cmpt) in enumerate(ec.components)
         if isa(cmpt, branch)
@@ -394,15 +409,15 @@ function add_sinks!(ec::ElasticCircuit, inst_cnt::counter)
             if ec.components[cmpt_idx].branchT == 0
                 empty_branch_cnt+=1
                 #add a sink to the branch
-                push!(ec.components, sink(:sink_, cmpt.bbID, inst_cnt.val+1, [cmpt_idx]))
-                inc(inst_cnt)
+                push!(ec.components, sink(:sink_, cmpt.bbID, inc(inst_cntrs[sink]), [cmpt_idx]))
+                inc(inst_cntrs[Any])
                 sink_idx = length(ec.components)
                 ec.components[cmpt_idx].branchT = sink_idx
             end
             if ec.components[cmpt_idx].branchF == 0
                 empty_branch_cnt+=1
-                push!(ec.components, sink(:sink_, cmpt.bbID, inst_cnt.val+1, [cmpt_idx]))
-                inc(inst_cnt)
+                push!(ec.components, sink(:sink_, cmpt.bbID, inc(inst_cntrs[sink]), [cmpt_idx]))
+                inc(inst_cntrs[Any])
                 sink_idx = length(ec.components)
                 ec.components[cmpt_idx].branchF = sink_idx
             end
@@ -412,7 +427,7 @@ function add_sinks!(ec::ElasticCircuit, inst_cnt::counter)
             end
         end
     end
-    return ec, inst_cnt
+    return ec, inst_cntrs
 end
 
 
@@ -435,7 +450,8 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
 
     cmpts = AbstractElasticComponent[]
 
-    inst_cnt = counter() #counts the component instances, TODO change to per component types in a dictionary or smth
+    inst_cntrs = Dict(ec_type=>counter() for ec_type in get_concrete_types(AbstractElasticComponent)) #instances of the AbstractElasticComponents
+    push!(inst_cntrs, Core.Any=>counter()) #all instances
     arg_len = length(cdfg.args)
     node_len = length(cdfg.nodes)
 
@@ -475,7 +491,7 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
         end
 
         if isa(node.op, Core.GlobalRef) #it must be an operator
-            op_tmp, constants = convert_operator(node, node_idx, inst_cnt, arg_len, node_len, constants)
+            op_tmp, constants = convert_operator(node, node_idx, inst_cntrs, arg_len, node_len, constants)
         elseif node.op == :return #special kind of operator that doesnt use global ref
             input1Type=nothing
             output1Type=nothing
@@ -491,33 +507,44 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
                     predComps[1] = node.dataPreds[1][1].id-1 + node_len
                 else
                     #handle constant values
-                    error("unsupported constant values")
+                    cnst_idx =  node_len + arg_len + length(constants)+1
+                    push!(constants, ECconstant(:cst_, node.bb, inc(inst_cntrs[ECconstant]), node.dataPreds[1][1], node.dataPreds[2][1], Int[0], Int[node_idx]))
+                    predComps[1] = cnst_idx
+                    inc(inst_cntrs[Any])
                 end
             else
                 println("Returning nothing is valid")
             end
-            op_tmp = return_op(:ret_, node.bb, inst_cnt.val+1, input1Type, output1Type, 0.0, 0, 1, predComps, Int[]) #successor left as 0 (undefined) add exit later
+            op_tmp = return_op(:ret_, node.bb, inst_cntrs[return_op].val+1, input1Type, output1Type, 0.0, 0, 1, predComps, Int[]) #successor left as 0 (undefined) add exit later
         elseif node.op == :gotoifnot
             #add placeholder component to maintain index linking - TODO add a pass that removes these index links or ignore them in printing
             #op_tmp = placeholder(:gottoifnot_, node.bb, copy(node.dataPreds[1]), copy(node.dataSuccs) ) # this will lose constants or function arguments
 
             #add a control branch - might not work in all cases, we'll see
-            if node.dataPreds[4][1]
+            if node.dataPreds[4][1] # literal bool
                 if !isa(node.dataPreds[1][1], Core.SlotNumber)
-                    error("Constants not yet supported")
+                    cnst_idx =  node_len + arg_len + length(constants)+1
+                    push!(constants, ECconstant(:cst_, node.bb, inc(inst_cntrs[ECconstant]), node.dataPreds[1][1], node.dataPreds[2][1], Int[0], Int[node_idx]))
+                    sel_line_pred = cnst_idx
+                    inc(inst_cntrs[Any])
                 else
                     sel_line_pred = (val.id-1 + node_len)
                 end
             else
                 sel_line_pred = node.dataPreds[1][1]
             end
-            op_tmp = branch(:branchC_, node.bb, inst_cnt.val+1, Core.Any, Core.Any, Core.Any, Int[0, sel_line_pred], 0, 0)
+            op_tmp = branch(:branchC_, node.bb, inc(inst_cntrs[branch]), Core.Any, Core.Any, Core.Any, Int[0, sel_line_pred], 0, 0)
         elseif node.op == :goto #handle like gotoifnot but with a constant value on the select line - set to true
-            error("goto constants not yet supported")
+            #error("goto constants not yet supported")
+            cnst_idx =  node_len + arg_len + length(constants)+1
+            push!(constants, ECconstant(:cst_, node.bb, inc(inst_cntrs[ECconstant]), true, Core.Bool, Int[0], Int[node_idx]))
+            sel_line_pred = cnst_idx
+            inc(inst_cntrs[Any])
+            op_tmp = branch(:branchC_, node.bb, inc(inst_cntrs[branch]), Core.Any, Core.Any, Core.Any, Int[0, sel_line_pred], 0, 0)
         else
             error("Unsupported cdfg op type")
         end
-        inc(inst_cnt)
+        inc(inst_cntrs[Any])
         push!(cmpts, op_tmp) #add the new component to the list
     end
 
@@ -525,8 +552,8 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
     for arg in cdfg.args
         #how to handle fork situation at this stage
         #TODO assuming block1, maybe change this in cdfg if only used in a later block
-        arg_tmp = entry(arg.name, 1, inst_cnt.val+1, false, arg.type, Int[0], copy(arg.dataSuccs))
-        inc(inst_cnt)
+        arg_tmp = entry(arg.name, 1, inc(inst_cntrs[entry]), false, arg.type, Int[0], copy(arg.dataSuccs))
+        inc(inst_cntrs[Any])
         push!(cmpts, arg_tmp)
 
         arg_idx = length(cmpts)
@@ -552,12 +579,12 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
     ec = ElasticCircuit(bbnodes, cmpts)
 
     #run the ec passes in the right order
-    ec, inst_cnt = add_phis!(ec, inst_cnt)
-    ec, inst_cnt = add_branches!(ec, inst_cnt)
-    ec, inst_cnt = add_controls!(ec, inst_cnt)
+    ec, inst_cntrs = add_phis!(ec, inst_cntrs)
+    ec, inst_cntrs = add_branches!(ec, inst_cntrs)
+    ec, inst_cntrs = add_controls!(ec, inst_cntrs)
 
-    ec, inst_cnt = add_forks!(ec, inst_cnt)
-    ec, inst_cnt = add_sinks!(ec, inst_cnt)
+    ec, inst_cntrs = add_forks!(ec, inst_cntrs)
+    ec, inst_cntrs = add_sinks!(ec, inst_cntrs)
 
     #TODO some final validation before returning the ec
     return ec
