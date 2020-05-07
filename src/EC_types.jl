@@ -130,6 +130,7 @@ struct ECconstant <: AbstractElasticComponent
 
     value::Any
     type::DataType
+    predComps::Vector{Int} #predecessors necessary for sauce
     succComps::Vector{Int} #output component (array position)
 end
 
