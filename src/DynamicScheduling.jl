@@ -35,7 +35,7 @@ end
 #include("EC_DOT_printer.jl") #TODO workout the dependency/sub-module julia way of doing this
 
 ################ EC helper functions ################
-function convert_operator(node::SSATools.CDFGNode, inst_cnt::counter, arg_len::Int, node_len::Int) #TODO add to Base.convert
+function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cnt::counter, arg_len::Int, node_len::Int, cnsts::Vector{ECconstant}) #TODO add to Base.convert
     predComps = Int[]
     input1Type=nothing
     input2Type=nothing
@@ -54,16 +54,19 @@ function convert_operator(node::SSATools.CDFGNode, inst_cnt::counter, arg_len::I
             push!(predComps, (val.id-1 + node_len))
         else
             #TODO handle constant values - best way might be to assume const are after args and return some sort of flag?
-            error("unsupported constant values")
+            #error("unsupported constant values")
+            cnst_idx =  node_len + arg_len + length(cnsts)+1
+            push!(cnsts, ECconstant(:cst_, node.bb, 42, val, type, Int[0], Int[node_idx]))
+            push!(predComps, cnst_idx)
         end
     end
 
     if node.op.name == :mul_int
-        return mul_int(:mul_, node.bb, inst_cnt.val+1, input1Type, input2Type, node.type, 0.000, 4, 1, predComps, copy(node.dataSuccs))
+        return mul_int(:mul_, node.bb, inst_cnt.val+1, input1Type, input2Type, node.type, 0.000, 4, 1, predComps, copy(node.dataSuccs)), cnsts
     elseif node.op.name == :sub_int
-        return sub_int(:sub_, node.bb, inst_cnt.val+1, input1Type, input2Type, node.type, 1.693, 0, 1, predComps, copy(node.dataSuccs))
+        return sub_int(:sub_, node.bb, inst_cnt.val+1, input1Type, input2Type, node.type, 1.693, 0, 1, predComps, copy(node.dataSuccs)), cnsts
     elseif node.op.name == :slt_int
-        return slt_int(:icmp_, node.bb, inst_cnt.val+1, input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs))
+        return slt_int(:icmp_, node.bb, inst_cnt.val+1, input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
     else
         error("Unsupported operator: ", string(node.op.name))
     end
@@ -438,6 +441,7 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
 
     #convert the existing cdfgnodes to enodes, add them to the component list - sort out indexing/ssa numbering here
     #manual conversion for the time being - use type inference in future
+    constants = ECconstant[]
     for (node_idx, node) in enumerate(cdfg.nodes) #TODO try and come up with a more efficient way of doing this
 
         #only really care about pred information - I don't think it will be more efficient from successor direction
@@ -465,13 +469,13 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
                     #set its status as live in and live out
                     #add val to live in and live out list
                 end
-            else
-                error("constants not supported yet")
+            #else
+            #    error("constants not supported yet")
             end
         end
 
         if isa(node.op, Core.GlobalRef) #it must be an operator
-            op_tmp = convert_operator(node, inst_cnt, arg_len, node_len)
+            op_tmp, constants = convert_operator(node, node_idx, inst_cnt, arg_len, node_len, constants)
         elseif node.op == :return #special kind of operator that doesnt use global ref
             input1Type=nothing
             output1Type=nothing
@@ -540,6 +544,9 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
             push!(bbnodes[1]["liveins"], arg_idx) #args are live ins of bb 1 ALWAYS (according to EC)
         end
     end
+
+    #add the constants to the end of the component list
+    append!(cmpts, constants)
 
     #initial ec without control, branches, phis, forks, sources, sinks etc.
     ec = ElasticCircuit(bbnodes, cmpts)
@@ -639,6 +646,8 @@ function printDOT_cmpt(cmpt::return_op)
     dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
     println(dot_str)
 end
+
+#"cst_0" [type = "Constant", bbID= 3, in = "in1:32", out = "out1:32", value = "0x00000001"];
 
 function printDOT_cmpt(cmpt::mul_int)
     dot_str = ""
