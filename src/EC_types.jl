@@ -112,6 +112,7 @@ struct source <: AbstractElasticComponent
     bbID::Int #basic block number
     instNum::Int #the number of components of this type (prevents naming conflicts)
 
+    type::DataType
     succComps::Vector{Int} #output component (array position)
 end
 
@@ -120,6 +121,7 @@ struct sink <: AbstractElasticComponent
     bbID::Int #basic block number
     instNum::Int #the number of components of this type (prevents naming conflicts)
 
+    type::DataType
     predComps::Vector{Int} #input components (array positions)
 end
 

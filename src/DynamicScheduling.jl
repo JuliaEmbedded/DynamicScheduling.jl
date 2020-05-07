@@ -51,7 +51,7 @@ end
 
 get_concrete_types(t::DataType) = get_concrete_types(t, DataType[])
 
-function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cntrs::Dict, arg_len::Int, node_len::Int, cnsts::Vector{ECconstant}) #TODO add to Base.convert
+function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cntrs::Dict{DataType, counter}, arg_len::Int, node_len::Int, cnsts::Vector{ECconstant}) #TODO add to Base.convert
     predComps = Int[]
     input1Type=nothing
     input2Type=nothing
@@ -69,6 +69,9 @@ function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cntrs::Di
         elseif isa(val, Core.SlotNumber)
             push!(predComps, (val.id-1 + node_len))
         else
+            if type ∉ get_concrete_types(Integer)
+                error("only integer constants supported")
+            end
             cnst_idx =  node_len + arg_len + length(cnsts)+1
             push!(cnsts, ECconstant(:cst_, node.bb, inc(inst_cntrs[ECconstant]), val, type, Int[0], Int[node_idx]))
             push!(predComps, cnst_idx)
@@ -88,7 +91,7 @@ function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cntrs::Di
 end
 
 #adds the control infrastructure
-function add_controls!(ec::ElasticCircuit, inst_cntrs::Dict)
+function add_controls!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
     #looking at the ec c++ lib, they add the control information to bbnodes as well, from the dot graph printer this info is not used - redundant?
     #TODO check if this information is worth including in bbnodes - for now, not worth it since it requires type change of vector
 
@@ -159,7 +162,7 @@ function add_controls!(ec::ElasticCircuit, inst_cntrs::Dict)
 
         else #no branching for this bb
             #llvm has implicit return - TODO check if julia tir has the same issue, I don't think so? but maybe if nothing returned
-            push!(ec.components, sink(:sink_, 0, inc(inst_cntrs[sink]), Int[ctrl_idx]))
+            push!(ec.components, sink(:sink_, 0, inc(inst_cntrs[sink]), Any, Int[ctrl_idx]))
             inc(inst_cntrs[Any])
             push!(ec.components[ctrl_idx].succComps, lastindex(ec.components)) #correct successor of the current control node
         end
@@ -168,7 +171,7 @@ function add_controls!(ec::ElasticCircuit, inst_cntrs::Dict)
     return ec, inst_cntrs
 end
 
-function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict)
+function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
     #TODO handle the mess that is IR phi nodes
     #live-ness analysis
     bb_defs = [copy(bb["stmt_idx"]) for bb in ec.bbnodes]
@@ -306,7 +309,7 @@ function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict)
     return ec, inst_cntrs
 end
 
-function add_branches!(ec::ElasticCircuit, inst_cntrs::Dict)
+function add_branches!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
     for (bb_num, bb) in enumerate(ec.bbnodes)
         goto_cmpt = ec.components[bb["stmt_idx"][end]]
         if length(bb["ctrlSuccs"]) <= 0 #has not bbs afterwards so can't branch from here (must have a return)
@@ -368,7 +371,7 @@ function add_branches!(ec::ElasticCircuit, inst_cntrs::Dict)
 end
 
 #adds the forks
-function add_forks!(ec::ElasticCircuit, inst_cntrs::Dict)
+function add_forks!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
     no_fork_list = [branch, sink, exit_ctrl, fork] #component types with allowable multiple successors OR should not be forked from
     for (cmpt_idx, cmpt) in enumerate(ec.components)
         if typeof(cmpt) ∉ no_fork_list && length(cmpt.succComps) > 1
@@ -400,7 +403,7 @@ function add_forks!(ec::ElasticCircuit, inst_cntrs::Dict)
     return ec, inst_cntrs
 end
 
-function add_sinks!(ec::ElasticCircuit, inst_cntrs::Dict)
+function add_sinks!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
 
     for (cmpt_idx, cmpt) in enumerate(ec.components)
         if isa(cmpt, branch)
@@ -409,14 +412,14 @@ function add_sinks!(ec::ElasticCircuit, inst_cntrs::Dict)
             if ec.components[cmpt_idx].branchT == 0
                 empty_branch_cnt+=1
                 #add a sink to the branch
-                push!(ec.components, sink(:sink_, cmpt.bbID, inc(inst_cntrs[sink]), [cmpt_idx]))
+                push!(ec.components, sink(:sink_, cmpt.bbID, inc(inst_cntrs[sink]), cmpt.input1Type, [cmpt_idx]))
                 inc(inst_cntrs[Any])
                 sink_idx = length(ec.components)
                 ec.components[cmpt_idx].branchT = sink_idx
             end
             if ec.components[cmpt_idx].branchF == 0
                 empty_branch_cnt+=1
-                push!(ec.components, sink(:sink_, cmpt.bbID, inc(inst_cntrs[sink]), [cmpt_idx]))
+                push!(ec.components, sink(:sink_, cmpt.bbID, inc(inst_cntrs[sink]), cmpt.input1Type, [cmpt_idx]))
                 inc(inst_cntrs[Any])
                 sink_idx = length(ec.components)
                 ec.components[cmpt_idx].branchF = sink_idx
@@ -430,6 +433,18 @@ function add_sinks!(ec::ElasticCircuit, inst_cntrs::Dict)
     return ec, inst_cntrs
 end
 
+function add_sources!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
+    for (cmpt_idx, cmpt) in enumerate(ec.components)
+        if isa(cmpt, ECconstant)
+            if !isa(ec.components[cmpt.succComps[1]], branch)
+                push!(ec.components, source(:source_, cmpt.bbID, inc(inst_cntrs[source]), cmpt.type, [cmpt_idx]))
+                cmpt.predComps[1] = length(ec.components)
+                inc(inst_cntrs[Any])
+            end
+        end
+    end
+    return ec, inst_cntrs
+end
 
 ################ EC generation #######################
 
@@ -507,6 +522,9 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
                     predComps[1] = node.dataPreds[1][1].id-1 + node_len
                 else
                     #handle constant values
+                    if type ∉ get_concrete_types(Integer)
+                        error("only integer constants supported")
+                    end
                     cnst_idx =  node_len + arg_len + length(constants)+1
                     push!(constants, ECconstant(:cst_, node.bb, inc(inst_cntrs[ECconstant]), node.dataPreds[1][1], node.dataPreds[2][1], Int[0], Int[node_idx]))
                     predComps[1] = cnst_idx
@@ -523,6 +541,9 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
             #add a control branch - might not work in all cases, we'll see
             if node.dataPreds[4][1] # literal bool
                 if !isa(node.dataPreds[1][1], Core.SlotNumber)
+                    if type ∉ get_concrete_types(Integer)
+                        error("only integer constants supported")
+                    end
                     cnst_idx =  node_len + arg_len + length(constants)+1
                     push!(constants, ECconstant(:cst_, node.bb, inc(inst_cntrs[ECconstant]), node.dataPreds[1][1], node.dataPreds[2][1], Int[0], Int[node_idx]))
                     sel_line_pred = cnst_idx
@@ -536,6 +557,9 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
             op_tmp = branch(:branchC_, node.bb, inc(inst_cntrs[branch]), Core.Any, Core.Any, Core.Any, Int[0, sel_line_pred], 0, 0)
         elseif node.op == :goto #handle like gotoifnot but with a constant value on the select line - set to true
             #error("goto constants not yet supported")
+            if type ∉ get_concrete_types(Integer)
+                error("only integer constants supported")
+            end
             cnst_idx =  node_len + arg_len + length(constants)+1
             push!(constants, ECconstant(:cst_, node.bb, inc(inst_cntrs[ECconstant]), true, Core.Bool, Int[0], Int[node_idx]))
             sel_line_pred = cnst_idx
@@ -585,6 +609,7 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
 
     ec, inst_cntrs = add_forks!(ec, inst_cntrs)
     ec, inst_cntrs = add_sinks!(ec, inst_cntrs)
+    ec, inst_cntrs = add_sources!(ec, inst_cntrs)
 
     #TODO some final validation before returning the ec
     return ec
@@ -664,6 +689,24 @@ function printDOT_cmpt(cmpt::sink)
     println(dot_str)
 end
 
+function printDOT_cmpt(cmpt::source)
+    dot_str = ""
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Source\", "
+    dot_str*= "bbID = $(cmpt.bbID), out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type.size*8))\"];" #assuming 0 - may need to include some type info in sink struct
+    println(dot_str)
+end
+
+#"cst_0" [type = "Constant", bbID= 3, in = "in1:32", out = "out1:32", value = "0x00000001"];
+function printDOT_cmpt(cmpt::ECconstant)
+    dot_str = ""
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Constant\", "
+    dot_str*= "bbID = $(cmpt.bbID)"
+    dot_str*="in = \"in1:$(cmpt.type == Core.Any ? 0 : (cmpt.type.size*8))\", "
+    dot_str*="out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type.size*8))\", "
+    dot_str*="value = \"0x$(string(cmpt.value, base=16))\"];" #assuming 0 - may need to include some type info in sink struct
+    println(dot_str)
+end
+
 function printDOT_cmpt(cmpt::return_op)
     dot_str = ""
     dot_str*= "\"ret_$(cmpt.instNum)\" [type = \"Operator\", "
@@ -673,8 +716,6 @@ function printDOT_cmpt(cmpt::return_op)
     dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
     println(dot_str)
 end
-
-#"cst_0" [type = "Constant", bbID= 3, in = "in1:32", out = "out1:32", value = "0x00000001"];
 
 function printDOT_cmpt(cmpt::mul_int)
     dot_str = ""
@@ -804,6 +845,40 @@ end
 
 function printDOT_link(cmpt_idx::Int, cmpt::sink, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
     #has no successors
+end
+
+function printDOT_link(cmpt_idx::Int, cmpt::source, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+    dot_str = ""
+    for n in 1:tab_num
+        dot_str *= "\t"
+    end
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
+
+    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
+    if length(idx_arr) > 1
+        error("Connecting twice not currently supported")
+    end
+
+    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    println(dot_str)
+end
+
+function printDOT_link(cmpt_idx::Int, cmpt::ECconstant, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+    dot_str = ""
+    for n in 1:tab_num
+        dot_str *= "\t"
+    end
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
+
+    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
+    if length(idx_arr) > 1
+        error("Connecting twice not currently supported")
+    end
+
+    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    println(dot_str)
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::return_op, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
