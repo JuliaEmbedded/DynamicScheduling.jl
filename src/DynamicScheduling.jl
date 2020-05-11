@@ -59,6 +59,7 @@ function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cntrs::Di
     predComps = Int[]
     input1Type=nothing
     input2Type=nothing
+    int_types = get_concrete_types(Integer)
     for (val, type, pos, lit_bool) in zip(node.dataPreds[1], node.dataPreds[2], node.dataPreds[3], node.dataPreds[4])
         if pos == 1
             input1Type = type
@@ -73,7 +74,7 @@ function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cntrs::Di
         elseif isa(val, Core.SlotNumber)
             push!(predComps, (val.id-1 + node_len))
         else
-            if type ∉ get_concrete_types(Integer)
+            if type ∉ int_types
                 error("only integer constants supported")
             end
             cnst_idx =  node_len + arg_len + length(cnsts)+1
@@ -87,8 +88,16 @@ function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cntrs::Di
         return mul_int(:mul_, node.bb, inc(inst_cntrs[mul_int]), input1Type, input2Type, node.type, 0.000, 4, 1, predComps, copy(node.dataSuccs)), cnsts
     elseif node.op.name == :sub_int
         return sub_int(:sub_, node.bb, inc(inst_cntrs[sub_int]), input1Type, input2Type, node.type, 1.693, 0, 1, predComps, copy(node.dataSuccs)), cnsts
+    elseif node.op.name == :add_int
+        return add_int(:add_, node.bb, inc(inst_cntrs[sub_int]), input1Type, input2Type, node.type, 1.693, 0, 1, predComps, copy(node.dataSuccs)), cnsts
     elseif node.op.name == :slt_int
         return slt_int(:icmp_, node.bb, inc(inst_cntrs[slt_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
+    elseif node.op.name == :(===)
+        if input1Type ∈ int_types && input2Type ∈ int_types
+            return eq_int(:icmp_, node.bb, inc(inst_cntrs[slt_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
+        else
+            error("Unsupported comparison of non integers")
+        end
     else
         error("Unsupported operator: ", string(node.op.name))
     end
@@ -993,10 +1002,32 @@ function printDOT_cmpt(cmpt::sub_int)
     println(dot_str)
 end
 
+function printDOT_cmpt(cmpt::add_int) # "add_14" [type = "Operator", bbID= 6, op = "add_op", in = "in1:32 in2:32 ", out = "out1:32 ", delay=1.693, latency=0, II=1];
+    dot_str = ""
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
+    dot_str*= "bbID = $(cmpt.bbID), op = \"add_op\", in = \""
+    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
+    dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
+    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8))\", "
+    dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
+    println(dot_str)
+end
+
 function printDOT_cmpt(cmpt::slt_int)
     dot_str = ""
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
     dot_str*= "bbID = $(cmpt.bbID), op = \"icmp_slt_op\", in = \""
+    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
+    dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
+    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8))\", " #might need to be forced to 1 bit
+    dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
+    println(dot_str)
+end
+
+function printDOT_cmpt(cmpt::eq_int) #"icmp_9" [type = "Operator", bbID= 5, op = "icmp_eq_op", in = "in1:32 in2:32 ", out = "out1:1 ", delay=1.530, latency=0, II=1];
+    dot_str = ""
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
+    dot_str*= "bbID = $(cmpt.bbID), op = \"icmp_eq_op\", in = \""
     dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
     dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
     dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8))\", " #might need to be forced to 1 bit
@@ -1234,7 +1265,41 @@ function printDOT_link(cmpt_idx::Int, cmpt::sub_int, cmpts::Vector{AbstractElast
     println(dot_str)
 end
 
+function printDOT_link(cmpt_idx::Int, cmpt::add_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+    dot_str = ""
+    for n in 1:tab_num
+        dot_str *= "\t"
+    end
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
+
+    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
+    if length(idx_arr) > 1
+        error("Connecting twice not supported")
+    end
+
+    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    println(dot_str)
+end
+
 function printDOT_link(cmpt_idx::Int, cmpt::slt_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+    dot_str = ""
+    for n in 1:tab_num
+        dot_str *= "\t"
+    end
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
+
+    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
+    if length(idx_arr) > 1
+        error("Connecting twice not supported")
+    end
+
+    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    println(dot_str)
+end
+
+function printDOT_link(cmpt_idx::Int, cmpt::eq_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
     dot_str = ""
     for n in 1:tab_num
         dot_str *= "\t"

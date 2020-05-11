@@ -240,3 +240,37 @@ mutable struct slt_int <: AbstractCompare # strictly less than, (first arg slt s
     predComps::Vector{Int} #input components (array positions)
     succComps::Vector{Int} #output component (array position)
 end
+
+mutable struct eq_int <: AbstractCompare # equal - icmp_eq_op
+    name::Symbol
+    bbID::Int #basic block number
+    instNum::Int #the number of components of this type (prevents naming conflicts)
+
+    input1Type::DataType
+    input2Type::DataType
+    output1Type::DataType
+
+    delay::Float32 #timed value - 1.530
+    latency::Int #cycles - 0
+    II::Int #from what I've seen - always 1
+
+    predComps::Vector{Int} #input components (array positions)
+    succComps::Vector{Int} #output component (array position)
+end
+
+mutable struct add_int <: AbstractSub #add_op
+    name::Symbol
+    bbID::Int #basic block number
+    instNum::Int #the number of components of this type (prevents naming conflicts)
+
+    input1Type::DataType
+    input2Type::DataType
+    output1Type::DataType
+
+    delay::Float32 #timed value - 1.693
+    latency::Int #cycles - 0
+    II::Int #from what I've seen - always 1
+
+    predComps::Vector{Int} #input components (array positions)
+    succComps::Vector{Int} #output component (array position)
+end
