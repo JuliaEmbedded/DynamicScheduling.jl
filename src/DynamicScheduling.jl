@@ -587,7 +587,7 @@ function add_forks!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
         end
         #gen the mux fork
         if isa(cmpt, merge_ctrl) && length(cmpt.succCtrls) > 1
-            bitWidth = Int64(ceil(log2(length(length(cmpt.succComps))))) #bitwidth of condition signal
+            bitWidth = Int64(ceil(log2(length(cmpt.predComps)))) #bitwidth of condition signal
 
             fork_succs = []
             fork_idx = length(ec.components)+1
@@ -910,6 +910,33 @@ function printDOT_cmpt(cmpt::merge_data)
     println(dot_str)
 end
 
+function printDOT_cmpt(cmpt::merge_ctrl) #"phiC_8" [type = "CntrlMerge", bbID= 4, in = "in1:0 in2:0 ", out = "out1:0 out2?:1", delay=0.166];
+    dot_str = ""
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"CntrlMerge\", "
+    dot_str*= "bbID = $(cmpt.bbID), in = \""
+    for (ip_t_num, ip_t) in enumerate(cmpt.inputTypes)
+        dot_str*= "in$ip_t_num:$(ip_t == Core.Any ? 0 : (ip_t.size*8)) "
+    end
+    dot_str*= "\", out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8)) "
+    bitWidth = Int64(ceil(log2(length(cmpt.predComps))))
+    dot_str*= "out2?:$(bitWidth)\", "
+    dot_str*= "delay = $(cmpt.delay)];"
+    println(dot_str)
+end
+
+function printDOT_cmpt(cmpt::mux) #"phi_n5" [type = "Mux", bbID= 4, in = "in1?:1 in2:32 in3:32 ", out = "out1:32", delay=0.366];
+    dot_str = ""
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Mux\", "
+    bitWidth = Int64(ceil(log2(length(cmpt.predComps))))
+    dot_str*= "bbID = $(cmpt.bbID), in = \"in1?:$bitWidth "
+    for (ip_t_num, ip_t) in enumerate(cmpt.inputTypes)
+        dot_str*= "in$(ip_t_num+1):$(ip_t == Core.Any ? 0 : (ip_t.size*8)) "
+    end
+    dot_str*= "\", out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8))\", "
+    dot_str*= "delay = $(cmpt.delay)];"
+    println(dot_str)
+end
+
 function printDOT_cmpt(cmpt::sink)
     dot_str = ""
     dot_str*= "\"sink_$(cmpt.instNum)\" [type = \"Sink\", "
@@ -924,8 +951,7 @@ function printDOT_cmpt(cmpt::source)
     println(dot_str)
 end
 
-#"cst_0" [type = "Constant", bbID= 3, in = "in1:32", out = "out1:32", value = "0x00000001"];
-function printDOT_cmpt(cmpt::ECconstant)
+function printDOT_cmpt(cmpt::ECconstant) #"cst_0" [type = "Constant", bbID= 3, in = "in1:32", out = "out1:32", value = "0x00000001"];
     dot_str = ""
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Constant\", "
     dot_str*= "bbID = $(cmpt.bbID)"
