@@ -646,7 +646,7 @@ end
 function add_sources!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
     for (cmpt_idx, cmpt) in enumerate(ec.components)
         if isa(cmpt, ECconstant)
-            if !isa(ec.components[cmpt.succComps[1]], branch) # don't always want to spawn tokens for all branches
+            if cmpt.predComps[1] == 0 # don't always want to spawn tokens for all branches
                 push!(ec.components, source(:source_, cmpt.bbID, inc(inst_cntrs[source]), cmpt.type, [cmpt_idx]))
                 cmpt.predComps[1] = length(ec.components)
                 inc(inst_cntrs[Any])
@@ -837,7 +837,7 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
 
     ec, inst_cntrs = add_forks!(ec, inst_cntrs)
     ec, inst_cntrs = add_sinks!(ec, inst_cntrs)
-    ec, inst_cntrs = add_sources!(ec, inst_cntrs)
+    #ec, inst_cntrs = add_sources!(ec, inst_cntrs)
 
     #TODO some final validation before returning the ec
     return ec
@@ -889,10 +889,10 @@ end
 function printDOT_cmpt(cmpt::fork)
     dot_str = ""
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Fork\", "
-    dot_str*= "bbID = $(cmpt.bbID), in = \"in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8))\", "
+    dot_str*= "bbID = $(cmpt.bbID), in = \"in1:$(cmpt.input1Type == Core.Any ? cmpt.bitWidth : (cmpt.input1Type == Core.Bool ? 1 : cmpt.input1Type.size*8))\", "
     dot_str*= "out = \""
     for (op_num, op) in enumerate(cmpt.succComps)
-        dot_str*= "out$op_num:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8)) "
+        dot_str*= "out$op_num:$(cmpt.output1Type == Core.Any ? cmpt.bitWidth : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8)) "
     end
     dot_str*= "\"];"
     println(dot_str)
@@ -954,9 +954,9 @@ end
 function printDOT_cmpt(cmpt::ECconstant) #"cst_0" [type = "Constant", bbID= 3, in = "in1:32", out = "out1:32", value = "0x00000001"];
     dot_str = ""
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Constant\", "
-    dot_str*= "bbID = $(cmpt.bbID)"
-    dot_str*="in = \"in1:$(cmpt.type == Core.Any ? 0 : (cmpt.type.size*8))\", "
-    dot_str*="out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type.size*8))\", "
+    dot_str*= "bbID = $(cmpt.bbID), "
+    dot_str*="in = \"in1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\", "
+    dot_str*="out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\", "
     dot_str*="value = \"0x$(string(cmpt.value, base=16))\"];" #assuming 0 - may need to include some type info in sink struct
     println(dot_str)
 end
@@ -965,8 +965,8 @@ function printDOT_cmpt(cmpt::return_op)
     dot_str = ""
     dot_str*= "\"ret_$(cmpt.instNum)\" [type = \"Operator\", "
     dot_str*= "bbID = $(cmpt.bbID), op = \"ret_op\", in = \""
-    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8))\", "
-    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8))\", "
+    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type == Core.Bool ? 1 : cmpt.input1Type.size*8))\", "
+    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8))\", "
     dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
     println(dot_str)
 end
@@ -999,7 +999,7 @@ function printDOT_cmpt(cmpt::slt_int)
     dot_str*= "bbID = $(cmpt.bbID), op = \"icmp_slt_op\", in = \""
     dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
     dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
-    dot_str*= "out = \"out1:1\"" #$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8))\", " #might need to be forced to 1 bit
+    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8))\", " #might need to be forced to 1 bit
     dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
     println(dot_str)
 end
@@ -1056,7 +1056,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::branch, cmpts::Vector{AbstractElasti
             colour = "blue"
         end
 
-        dot_str*= "[color = \"$(colour)\", minlen = 3, from = \"out$(out_num)\", to = \"in$(idx_arr[1])\"];" #minlen seems constant
+        dot_str*= "[color = \"$(colour)\", minlen = 3, from = \"out$(out_num)\", to = \"in$(isa(cmpts[br], mux) ? idx_arr[1]+1 : idx_arr[1])\"];" #minlen seems constant
         println(dot_str)
     end
 end
@@ -1073,9 +1073,11 @@ function printDOT_link(cmpt_idx::Int, cmpt::fork, cmpts::Vector{AbstractElasticC
         idx_arr = findall(isequal(cmpt_idx), cmpts[succ].predComps) #finds the refs to the current component in the target component
         if length(idx_arr) > 1
             error("Connecting twice not supported")
+        elseif length(idx_arr) < 1 && !isa(cmpts[succ], mux)
+            error("not connected: ", cmpt)
         end
-
-        dot_str*= "[color = \"$(cmpt.name == :branchC_ ? "gold3" : "red")\", from = \"out$(out_num)\", to = \"in$(idx_arr[1])\"];"
+        colour = (cmpt.name == :forkC_ ? "gold3" : (isa(cmpts[succ], mux) ? "green" : "red"))
+        dot_str*= "[color = \"$colour\", from = \"out$(out_num)\", to = \"in$(isa(cmpts[succ], mux) ? "1" : idx_arr[1])\"];"
         println(dot_str)
     end
 end
@@ -1093,7 +1095,53 @@ function printDOT_link(cmpt_idx::Int, cmpt::merge_data, cmpts::Vector{AbstractEl
         error("Connecting twice not supported")
     end
 
-    dot_str*= "[color = \"$(cmpt.name == :phiC_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    dot_str*= "[color = \"$(cmpt.name == :phiC_a ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    println(dot_str)
+end
+
+function printDOT_link(cmpt_idx::Int, cmpt::merge_ctrl, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+    dot_str = ""
+    for n in 1:tab_num
+        dot_str *= "\t"
+    end
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
+
+    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
+    if length(idx_arr) > 1
+        error("Connecting twice not supported")
+    elseif length(idx_arr) < 1
+        error("not connected")
+    end
+
+    dot_str*= "[color = \"$(cmpt.name == :phiMC_a ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    println(dot_str)
+
+    #mux condition driver
+    dot_str = ""
+    for n in 1:tab_num
+        dot_str *= "\t"
+    end
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+    dot_str*= "\"$(string(cmpts[cmpt.succCtrls[1]].name, cmpts[cmpt.succCtrls[1]].instNum))\" "
+    dot_str*= "[color = \"green\", from = \"out2\", to = \"in1\"];$(length(cmpt.succCtrls) > 1 ? "FOR FORKS SAKE" : "")"
+    println(dot_str)
+end
+
+function printDOT_link(cmpt_idx::Int, cmpt::mux, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+    dot_str = ""
+    for n in 1:tab_num
+        dot_str *= "\t"
+    end
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
+
+    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
+    if length(idx_arr) > 1
+        error("Connecting twice not supported")
+    end
+
+    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
     println(dot_str)
 end
 
@@ -1131,7 +1179,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::ECconstant, cmpts::Vector{AbstractEl
         error("Connecting twice not supported")
     end
 
-    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    dot_str*= "[color = \"$(cmpt.name == :brCst_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
     println(dot_str)
 end
 
