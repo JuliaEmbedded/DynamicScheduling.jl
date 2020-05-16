@@ -250,8 +250,9 @@ function add_controls!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
 end
 
 function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter}, cfg)
-    debug_flag=false
+    debug_flag=true
     bbnodes_cp = deepcopy(ec.bbnodes)
+
     #setting the predecessors of the phi nodes to placeholders - interfers with live in analysis
     plhdr_idxs = []
     for (cmpt_idx, cmpt) in enumerate(ec.components)
@@ -267,7 +268,8 @@ function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter}, cfg)
                 push!(add_nodes, plhr_idx)
                 push!(erase_nodes, pred)
 
-                pred_bb_def = SSATools.get_bb_num(cfg, pred)
+                #pred_bb_def = SSATools.get_bb_num(cfg, pred)
+                pred_bb_def = ec.components[pred].bbID #should be equivalent - necessary because pred may have been auto generated (not be in CDFG)
                 #add to stmt_idx in bbs - defs
                 pushfirst!(ec.bbnodes[pred_bb]["stmt_idx"], plhr_idx)
                 #edit the targets of the preds - uses
@@ -517,7 +519,7 @@ function add_branches!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
             for cmpt_idx in bb["liveouts"]
                 #ASSUMPTION - need a branch per variable
                 branch_idx_dec1 = length(ec.components)
-                input1Type = ec.components[cmpt_idx].output1Type
+                input1Type = (isa(ec.components[cmpt_idx], ECconstant) ? ec.components[cmpt_idx].type : ec.components[cmpt_idx].output1Type)
                 branchT = 0
                 branchF = 0
                 for (bb_succ) in bb["ctrlSuccs"] #ASSUMPTION - bbs max out branching to two bbs
@@ -707,13 +709,15 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
                 ec_idx = (isa(val, Core.SlotNumber) ? val.id-1 + node_len : val)
                 if pred_bb != node.bb
                     #update the pred bb live OUTS with the val idx
-                    if ec_idx ∉ bbnodes[pred_bb]["liveouts"]
-                        push!(bbnodes[pred_bb]["liveouts"], ec_idx)
-                    end
+                    #if ec_idx ∉ bbnodes[pred_bb]["liveouts"]
+                    #    push!(bbnodes[pred_bb]["liveouts"], ec_idx)
+                    #end
+                    union!(bbnodes[pred_bb]["liveouts"], [ec_idx])
                     #update the current bb live INS with the val value
-                    if ec_idx ∉ bbnodes[node.bb]["liveins"]
-                        push!(bbnodes[node.bb]["liveins"], ec_idx)
-                    end
+                    #if ec_idx ∉ bbnodes[node.bb]["liveins"]
+                    #    push!(bbnodes[node.bb]["liveins"], ec_idx)
+                    #end
+                    union!(bbnodes[pred_bb]["liveins"], [ec_idx])
                 else
                     #llvm phi live ins can originate from the same bb - TODO verify this is the case for IR
                     #set its status as live in and live out
@@ -785,7 +789,7 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
             predComps = Int[]
             inputTypes = DataType[]
 
-            for (val, type, pos, lit_bool) in zip(node.dataPreds[1], node.dataPreds[2], node.dataPreds[3], node.dataPreds[4])
+            for (val, type, pos, lit_bool, bb_def) in zip(node.dataPreds[1], node.dataPreds[2], node.dataPreds[3], node.dataPreds[4], node.ctrlPreds)
                 if !(lit_bool)
                     push!(predComps, val)
                 elseif isa(val, Core.SlotNumber)
@@ -795,13 +799,25 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
                         error("only integer constants supported")
                     end
                     cnst_idx =  node_len + arg_len + length(constants)+1
-                    push!(constants, ECconstant(:cst_, node.bb, inc(inst_cntrs[ECconstant]), val, type, Int[0], Int[node_idx]))
+                    push!(constants, ECconstant(:cst_, bb_def, inc(inst_cntrs[ECconstant]), val, type, Int[0], Int[node_idx]))
                     push!(predComps, cnst_idx)
                     inc(inst_cntrs[Any])
+
+                    #TODO verify
+                    pushfirst!(bbnodes[bb_def]["stmt_idx"], cnst_idx)
+                    push!(bbnodes[bb_def]["stmt_tgts"], cnst_idx=>Dict("tgt_bb"=>Int[node.bb], "tgt_idx"=>Int[node_idx]))
+                    union!(bbnodes[bb_def]["liveouts"], [cnst_idx])
+                    union!(bbnodes[node.bb]["liveins"], [cnst_idx])
                 end
                 push!(inputTypes, type)
             end
             op_tmp = mux(:phi_, node.bb, inc(inst_cntrs[mux]), inputTypes, node.type, predComps, copy(node.dataSuccs), 0, 0.366, copy(node.ctrlPreds))
+        elseif node.op == :nth #treat instance of nothing as a place holder for an implicit branch link
+            cnst_idx =  node_len + arg_len + length(constants)+1
+            push!(constants, ECconstant(:brCst_, node.bb, inc(inst_cntrs[ECconstant]), true, Core.Bool, Int[0], Int[node_idx]))
+            sel_line_pred = cnst_idx
+            inc(inst_cntrs[Any])
+            op_tmp = branch(:branchC_, node.bb, inc(inst_cntrs[branch]), Core.Any, Core.Any, Core.Any, Int[0, sel_line_pred], 0, 0)
         else
             error("Unsupported cdfg op type")
         end
@@ -841,12 +857,13 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
 
     #run the ec passes in the right order
     ec, inst_cntrs = add_phis!(ec, inst_cntrs, cdfg.cfg)
+    #return ec
     ec, inst_cntrs = add_branches!(ec, inst_cntrs)
     ec, inst_cntrs = add_controls!(ec, inst_cntrs)
 
     ec, inst_cntrs = add_forks!(ec, inst_cntrs)
     ec, inst_cntrs = add_sinks!(ec, inst_cntrs)
-    #ec, inst_cntrs = add_sources!(ec, inst_cntrs)
+    ec, inst_cntrs = add_sources!(ec, inst_cntrs)
 
     #TODO some final validation before returning the ec
     return ec

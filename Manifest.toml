@@ -23,9 +23,9 @@ version = "0.6.0"
 
 [[DataStructures]]
 deps = ["InteractiveUtils", "OrderedCollections"]
-git-tree-sha1 = "6166ecfaf2b8bbf2b68d791bc1d54501f345d314"
+git-tree-sha1 = "7d7578b00789cf16c5f68fad71868e773edd58a2"
 uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-version = "0.17.15"
+version = "0.17.16"
 
 [[Dates]]
 deps = ["Printf"]
@@ -68,9 +68,9 @@ uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 
 [[LightGraphs]]
 deps = ["ArnoldiMethod", "DataStructures", "Distributed", "Inflate", "LinearAlgebra", "Random", "SharedArrays", "SimpleTraits", "SparseArrays", "Statistics"]
-git-tree-sha1 = "e85fa18ae33a3ef55243d2c2c9f6ccea6f541566"
+git-tree-sha1 = "6f85a35d2377cb2db1bc448ed0d6340d2bb1ea64"
 uuid = "093fc24a-ae57-5d10-9952-331d41423f4d"
-version = "1.3.2"
+version = "1.3.3"
 
 [[LinearAlgebra]]
 deps = ["Libdl"]
@@ -124,7 +124,7 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
 [[SSATools]]
 deps = ["LightGraphs", "LinearAlgebra", "MacroTools", "MetaGraphs", "Test"]
-git-tree-sha1 = "9d88d8f6820919d226b05243306cd0bf5669c977"
+git-tree-sha1 = "a0c751ce12e05cedd51e7dcb8bb2c9a344b864ae"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaEmbedded/SSATools.jl"
 uuid = "028dadce-91a2-4ca7-bdd6-b2c6791f885f"
