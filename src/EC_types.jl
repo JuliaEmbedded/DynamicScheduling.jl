@@ -172,6 +172,16 @@ mutable struct ECconstant <: AbstractElasticComponent
     succComps::Vector{Int} #output component (array position)
 end
 
+mutable struct buffer <: AbstractElasticComponent
+    name::Symbol
+    bbID::Int #basic block number
+    instNum::Int #the number of components of this type (prevents naming conflicts)
+
+    type::DataType
+    predComps::Vector{Int} #predecessors necessary for sauce
+    succComps::Vector{Int} #output component (array position)
+end
+
 #operators
 mutable struct return_op <: AbstractOperator #SISO for now
     name::Symbol

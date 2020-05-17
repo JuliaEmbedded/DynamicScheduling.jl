@@ -625,7 +625,6 @@ function add_forks!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
 end
 
 function add_sinks!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
-
     for (cmpt_idx, cmpt) in enumerate(ec.components)
         if isa(cmpt, branch)
             sink_idx = 0
@@ -667,22 +666,50 @@ function add_sources!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
     return ec, inst_cntrs
 end
 
+#buffers dont affect circuit functionality, might add more than necessary
+#TODO check if merge_ctrl ctrl lines need buffering
+function add_buffers_basic!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
+    for (cmpt_idx, cmpt) in enumerate(ec.components)
+        if typeof(cmpt) ∈ [merge_ctrl, merge_data, mux] #phi types
+            if length(ec.bbnodes[cmpt.bbID]["ctrlPreds"]) > 1
+
+                if cmpt.name ∈ [:phiC_a, :phiMC_a]
+                    name = :buffC_
+                else
+                    name = :buff_
+                end
+                succComps = Int[]
+                push!(ec.components, buffer(name, cmpt.bbID, inc(inst_cntrs[buffer]), cmpt.output1Type, [cmpt_idx], succComps))
+                buff_idx = length(ec.components)
+
+                #post fork pass so components should only have 1 succComp
+                if length(cmpt.succComps) > 1
+                    error("too many successors: ", cmpt)
+                end
+
+                tgt_cmpt = cmpt.succComps[1]
+                tgt_pred_idx = findall(isequal(cmpt_idx), ec.components[tgt_cmpt].predComps)[1]
+                push!(succComps, tgt_cmpt) #add cmpt succ to buffer
+                ec.components[tgt_cmpt].predComps[tgt_pred_idx] = buff_idx #replace cmpt idx with buff idx in succComp
+                cmpt.succComps[1] = buff_idx #replace succ idx with buff idx in cmpt
+            end
+        end
+    end
+    return ec, inst_cntrs
+end
+
 ################ EC generation #######################
 
-function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
+function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=false)::ElasticCircuit
     #bbnodes = copy(cdfg.cfg.blocks)
     #TODO going to have to implemnet something similar for args
     bbnodes = [Dict("stmt_idx"=>Int[idx for idx in block.stmts],
                     "stmt_tgts"=>Dict(idx=>Dict("tgt_bb"=>Int[], "tgt_idx"=>Int[]) for idx in block.stmts),
-                    #"tgt_bb"=>Dict(idx=>Int[] for idx in block.stmts),
-                    #"tgt_idx"=>Dict(idx=>Int[] for idx in block.stmts),
                     "ctrlPreds"=>Int[pred for pred in block.preds],
                     "ctrlSuccs"=>Int[succ for succ in block.succs],
                     "liveins"=>Int[],
                     "liveouts"=>Int[])
                     for block in cdfg.cfg.blocks]
-
-
 
     cmpts = AbstractElasticComponent[]
 
@@ -709,14 +736,8 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
                 ec_idx = (isa(val, Core.SlotNumber) ? val.id-1 + node_len : val)
                 if pred_bb != node.bb
                     #update the pred bb live OUTS with the val idx
-                    #if ec_idx ∉ bbnodes[pred_bb]["liveouts"]
-                    #    push!(bbnodes[pred_bb]["liveouts"], ec_idx)
-                    #end
                     union!(bbnodes[pred_bb]["liveouts"], [ec_idx])
                     #update the current bb live INS with the val value
-                    #if ec_idx ∉ bbnodes[node.bb]["liveins"]
-                    #    push!(bbnodes[node.bb]["liveins"], ec_idx)
-                    #end
                     union!(bbnodes[pred_bb]["liveins"], [ec_idx])
                 else
                     #llvm phi live ins can originate from the same bb - TODO verify this is the case for IR
@@ -855,15 +876,18 @@ function ElasticCircuit(cdfg::SSATools.CDFG)::ElasticCircuit
     #initial ec without control, branches, phis, forks, sources, sinks etc.
     ec = ElasticCircuit(bbnodes, cmpts)
 
-    #run the ec passes in the right order
+    #run the ec passes in the right order, logic passes
     ec, inst_cntrs = add_phis!(ec, inst_cntrs, cdfg.cfg)
-    #return ec
     ec, inst_cntrs = add_branches!(ec, inst_cntrs)
     ec, inst_cntrs = add_controls!(ec, inst_cntrs)
-
+    #simple passes
     ec, inst_cntrs = add_forks!(ec, inst_cntrs)
     ec, inst_cntrs = add_sinks!(ec, inst_cntrs)
     ec, inst_cntrs = add_sources!(ec, inst_cntrs)
+
+    if add_buff #basic buffer pass, over-eagerly generates buffers
+        ec, inst_cntrs = add_buffers_basic!(ec, inst_cntrs)
+    end
 
     #TODO some final validation before returning the ec
     return ec
@@ -984,6 +1008,15 @@ function printDOT_cmpt(cmpt::ECconstant) #"cst_0" [type = "Constant", bbID= 3, i
     dot_str*="in = \"in1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\", "
     dot_str*="out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\", "
     dot_str*="value = \"0x$(string(cmpt.value, base=16))\"];" #assuming 0 - may need to include some type info in sink struct
+    println(dot_str)
+end
+
+function printDOT_cmpt(cmpt::buffer) #"buffI_0" [type = "Buffer", bbID= 3, in = "in1:32", out = "out1:32"];
+    dot_str = ""
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Buffer\", "
+    dot_str*= "bbID = $(cmpt.bbID), "
+    dot_str*="in = \"in1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\", "
+    dot_str*="out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\"];"
     println(dot_str)
 end
 
@@ -1228,6 +1261,23 @@ function printDOT_link(cmpt_idx::Int, cmpt::ECconstant, cmpts::Vector{AbstractEl
     end
 
     dot_str*= "[color = \"$(cmpt.name == :brCst_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    println(dot_str)
+end
+
+function printDOT_link(cmpt_idx::Int, cmpt::buffer, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+    dot_str = ""
+    for n in 1:tab_num
+        dot_str *= "\t"
+    end
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
+
+    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
+    if length(idx_arr) > 1
+        error("Connecting twice not supported")
+    end
+
+    dot_str*= "[color = \"$(cmpt.name == :buffC_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
     println(dot_str)
 end
 
