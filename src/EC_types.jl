@@ -6,24 +6,25 @@ abstract type AbstractControl <: AbstractElasticComponent end
 abstract type AbstractConnector <: AbstractElasticComponent end
 #operator abstracts
 abstract type AbstractMultiplier <: AbstractOperator end
-abstract type AbstractAdder <: AbstractOperator end
+#abstract type AbstractAdder <: AbstractOperator end
 abstract type AbstractSub <: AbstractOperator end
 abstract type AbstractCompare <: AbstractOperator end
 
 #concrete types - we're using "components" not nodes for elastic stuff, let's be consistent
-struct ElasticCircuit
+mutable struct ElasticCircuit
     #bbnodes::Vector{Core.Compiler.BasicBlock} #BasicBlock members - stmts, preds, succs
     bbnodes::Vector{Any}
     components::Vector{AbstractElasticComponent} #data links are inside
 end
 
 #placeholders - component will always be replaced or removed
-struct placeholder <: AbstractElasticComponent
+mutable struct placeholder <: AbstractElasticComponent
     #name::String #just take the type
     name::Symbol
     bbID::Int
-    predComps::Vector{Int}
-    succComps::Vector{Int}
+
+    predComps::Vector{Int} # the idx of the phi pred its replacing
+    succComps::Vector{Int} # phi mux idx
 end
 
 #=
@@ -42,19 +43,20 @@ end
 =#
 
 #elastic components
-struct fork <: AbstractConnector #maybe make mutable?
+mutable struct fork <: AbstractConnector #maybe make mutable?
     name::Symbol
     bbID::Int #basic block number
     instNum::Int #the number of components of this type (prevents naming conflicts)
 
     input1Type::DataType
+    bitWidth::Int #ONLY used for linking merge_ctrl and phi mux nodes - zero otherwise
     output1Type::DataType #more than one output but they'll all be the same type
 
     predComps::Vector{Int} #input components (array positions) - should only be one
     succComps::Vector{Int} #output components (array positions)
 end
 
-mutable struct merge_ctrl <: AbstractConnector #TODO rename to include non-ctrl merges
+mutable struct merge_data <: AbstractConnector
     name::Symbol
     bbID::Int #basic block number
     instNum::Int #the number of components of this type (prevents naming conflicts)
@@ -67,6 +69,40 @@ mutable struct merge_ctrl <: AbstractConnector #TODO rename to include non-ctrl 
     delay::Float32
 end
 
+mutable struct merge_ctrl <: AbstractConnector
+    name::Symbol
+    bbID::Int #basic block number
+    instNum::Int #the number of components of this type (prevents naming conflicts)
+
+    inputTypes::Vector{DataType}
+    output1Type::DataType
+    predComps::Vector{Int} #input components (array positions)
+    succComps::Vector{Int} #output component (array position)
+
+    succCtrls::Vector{Int}
+
+    delay::Float32
+    #helpful information
+    predBBs::Vector{Int}
+end
+
+mutable struct mux <: AbstractConnector
+    name::Symbol
+    bbID::Int #basic block number
+    instNum::Int #the number of components of this type (prevents naming conflicts)
+
+    inputTypes::Vector{DataType}
+    output1Type::DataType #multiple types output currently not supported - type inference should help
+    predComps::Vector{Int} #input components (array positions) first position is selecting input to route to op
+    succComps::Vector{Int} #output component (array position)
+
+    predCtrl::Int # should only be one
+
+    delay::Float32 #0.366, might be just for two input
+
+    #helpful information
+    predBBs::Vector{Int}
+end
 
 mutable struct entry <: AbstractControl
     name::Symbol
@@ -81,7 +117,7 @@ mutable struct entry <: AbstractControl
     succComps::Vector{Int} #output component (array position)
 end
 
-struct exit_ctrl <: AbstractControl
+mutable struct exit_ctrl <: AbstractControl
     name::Symbol
     bbID::Int #basic block number
     instNum::Int #the number of components of this type (prevents naming conflicts)
@@ -107,29 +143,42 @@ mutable struct branch <: AbstractControl
 end
 
 
-struct source <: AbstractElasticComponent
+mutable struct source <: AbstractElasticComponent
     name::Symbol
     bbID::Int #basic block number
     instNum::Int #the number of components of this type (prevents naming conflicts)
 
+    type::DataType
     succComps::Vector{Int} #output component (array position)
 end
 
-struct sink <: AbstractElasticComponent
+mutable struct sink <: AbstractElasticComponent
     name::Symbol
     bbID::Int #basic block number
     instNum::Int #the number of components of this type (prevents naming conflicts)
 
+    type::DataType
     predComps::Vector{Int} #input components (array positions)
 end
 
-struct ECconstant <: AbstractElasticComponent
+mutable struct ECconstant <: AbstractElasticComponent
     name::Symbol
     bbID::Int #basic block number
     instNum::Int #the number of components of this type (prevents naming conflicts)
 
     value::Any
     type::DataType
+    predComps::Vector{Int} #predecessors necessary for sauce
+    succComps::Vector{Int} #output component (array position)
+end
+
+mutable struct buffer <: AbstractElasticComponent
+    name::Symbol
+    bbID::Int #basic block number
+    instNum::Int #the number of components of this type (prevents naming conflicts)
+
+    type::DataType
+    predComps::Vector{Int} #predecessors necessary for sauce
     succComps::Vector{Int} #output component (array position)
 end
 
@@ -151,7 +200,7 @@ mutable struct return_op <: AbstractOperator #SISO for now
 end
 
 #mathematical operators
-struct mul_int <: AbstractMultiplier
+mutable struct mul_int <: AbstractMultiplier
     name::Symbol
     bbID::Int #basic block number
     instNum::Int #the number of components of this type (prevents naming conflicts)
@@ -168,7 +217,7 @@ struct mul_int <: AbstractMultiplier
     succComps::Vector{Int} #output component (array position)
 end
 
-struct sub_int <: AbstractSub
+mutable struct sub_int <: AbstractSub
     name::Symbol
     bbID::Int #basic block number
     instNum::Int #the number of components of this type (prevents naming conflicts)
@@ -185,7 +234,7 @@ struct sub_int <: AbstractSub
     succComps::Vector{Int} #output component (array position)
 end
 
-struct slt_int <: AbstractCompare # strictly less than, (first arg slt second arg)
+mutable struct slt_int <: AbstractCompare # strictly less than, (first arg slt second arg)
     name::Symbol
     bbID::Int #basic block number
     instNum::Int #the number of components of this type (prevents naming conflicts)
@@ -196,6 +245,40 @@ struct slt_int <: AbstractCompare # strictly less than, (first arg slt second ar
 
     delay::Float32 #timed value
     latency::Int #cycles
+    II::Int #from what I've seen - always 1
+
+    predComps::Vector{Int} #input components (array positions)
+    succComps::Vector{Int} #output component (array position)
+end
+
+mutable struct eq_int <: AbstractCompare # equal - icmp_eq_op
+    name::Symbol
+    bbID::Int #basic block number
+    instNum::Int #the number of components of this type (prevents naming conflicts)
+
+    input1Type::DataType
+    input2Type::DataType
+    output1Type::DataType
+
+    delay::Float32 #timed value - 1.530
+    latency::Int #cycles - 0
+    II::Int #from what I've seen - always 1
+
+    predComps::Vector{Int} #input components (array positions)
+    succComps::Vector{Int} #output component (array position)
+end
+
+mutable struct add_int <: AbstractSub #add_op
+    name::Symbol
+    bbID::Int #basic block number
+    instNum::Int #the number of components of this type (prevents naming conflicts)
+
+    input1Type::DataType
+    input2Type::DataType
+    output1Type::DataType
+
+    delay::Float32 #timed value - 1.693
+    latency::Int #cycles - 0
     II::Int #from what I've seen - always 1
 
     predComps::Vector{Int} #input components (array positions)
