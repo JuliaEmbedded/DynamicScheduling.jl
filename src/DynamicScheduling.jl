@@ -8,6 +8,7 @@ module DynamicScheduling
 using SSATools
 using Core.Compiler
 using InteractiveUtils
+using LightGraphs
 
 ################ type includes ######################
 include("EC_types.jl")
@@ -250,7 +251,7 @@ function add_controls!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
 end
 
 function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter}, cfg)
-    debug_flag=true
+    debug_flag=false
     bbnodes_cp = deepcopy(ec.bbnodes)
 
     #setting the predecessors of the phi nodes to placeholders - interfers with live in analysis
@@ -698,9 +699,48 @@ function add_buffers_basic!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, count
     return ec, inst_cntrs
 end
 
+function add_buffers_cycles_only!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter}, cfg::Core.Compiler.CFG)
+    #dependent on Johnson cycle algorithm - limited in size of graphs
+    dg = SSATools.cfg_to_lightgraph(cfg)
+    cycles = LightGraphs.simplecycles(dg)
+
+    if length(cycles) > 0 #graph has cycles so need for buffers
+        loop_starts = Int[]
+        for cycle in cycles
+            start_bb = min(cycle...)
+            union!(loop_starts, [start_bb])
+        end
+
+        for (cmpt_idx, cmpt) in enumerate(ec.components)
+            if typeof(cmpt) ∈ [merge_ctrl, merge_data, mux] && cmpt.bbID ∈ loop_starts #phi types && head of a loop
+                if cmpt.name ∈ [:phiC_a, :phiMC_a]
+                    name = :buffC_
+                else
+                    name = :buff_
+                end
+                succComps = Int[]
+                push!(ec.components, buffer(name, cmpt.bbID, inc(inst_cntrs[buffer]), cmpt.output1Type, [cmpt_idx], succComps))
+                buff_idx = length(ec.components)
+
+                #post fork pass so components should only have 1 succComp
+                if length(cmpt.succComps) > 1
+                    error("too many successors: ", cmpt)
+                end
+
+                tgt_cmpt = cmpt.succComps[1]
+                tgt_pred_idx = findall(isequal(cmpt_idx), ec.components[tgt_cmpt].predComps)[1]
+                push!(succComps, tgt_cmpt) #add cmpt succ to buffer
+                ec.components[tgt_cmpt].predComps[tgt_pred_idx] = buff_idx #replace cmpt idx with buff idx in succComp
+                cmpt.succComps[1] = buff_idx #replace succ idx with buff idx in cmpt
+            end
+        end
+    end
+    return ec, inst_cntrs
+end
+
 ################ EC generation #######################
 
-function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=false)::ElasticCircuit
+function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=:cycle)::ElasticCircuit
     #bbnodes = copy(cdfg.cfg.blocks)
     #TODO going to have to implemnet something similar for args
     bbnodes = [Dict("stmt_idx"=>Int[idx for idx in block.stmts],
@@ -885,7 +925,9 @@ function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=false)::ElasticCircuit
     ec, inst_cntrs = add_sinks!(ec, inst_cntrs)
     ec, inst_cntrs = add_sources!(ec, inst_cntrs)
 
-    if add_buff #basic buffer pass, over-eagerly generates buffers
+    if add_buff == :basic #basic buffer pass, over-eagerly generates buffers
+        ec, inst_cntrs = add_buffers_basic!(ec, inst_cntrs)
+    elseif add_buff ==:cycle
         ec, inst_cntrs = add_buffers_basic!(ec, inst_cntrs)
     end
 
@@ -909,7 +951,7 @@ end
 function printDOT_cmpt(cmpt::entry)
     typesize = (cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8)) #bit size
     dot_str = ""
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Entry\", "
+    dot_str*= "\"$(cmpt.name)$(cmpt.control ? "0" : "")\" [type = \"Entry\", "
     dot_str*= (cmpt.control ? "control = \"true\", " : "")
     dot_str*= "bbID = $(cmpt.bbID), in = \"in1:$typesize\", out = \"out1:$typesize\"];"
     println(dot_str)
@@ -1100,7 +1142,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::entry, cmpts::Vector{AbstractElastic
     for n in 1:tab_num
         dot_str *= "\t"
     end
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+    dot_str*= "\"$(cmpt.name)$(cmpt.control ? "0" : "")\" -> "
     dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
 
     idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component

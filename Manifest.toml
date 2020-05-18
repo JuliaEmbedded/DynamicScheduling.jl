@@ -124,7 +124,7 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
 [[SSATools]]
 deps = ["LightGraphs", "LinearAlgebra", "MacroTools", "MetaGraphs", "Test"]
-git-tree-sha1 = "a0c751ce12e05cedd51e7dcb8bb2c9a344b864ae"
+git-tree-sha1 = "06897158a4211af9da551ad67176a0786d43878b"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaEmbedded/SSATools.jl"
 uuid = "028dadce-91a2-4ca7-bdd6-b2c6791f885f"
