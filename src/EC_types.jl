@@ -6,7 +6,8 @@ abstract type AbstractControl <: AbstractElasticComponent end
 abstract type AbstractConnector <: AbstractElasticComponent end
 #operator abstracts
 abstract type AbstractMultiplier <: AbstractOperator end
-#abstract type AbstractAdder <: AbstractOperator end
+abstract type AbstractDivider <: AbstractOperator end
+abstract type AbstractAdder <: AbstractOperator end
 abstract type AbstractSub <: AbstractOperator end
 abstract type AbstractCompare <: AbstractOperator end
 
@@ -268,7 +269,24 @@ mutable struct eq_int <: AbstractCompare # equal - icmp_eq_op
     succComps::Vector{Int} #output component (array position)
 end
 
-mutable struct add_int <: AbstractSub #add_op
+mutable struct sle_int <: AbstractCompare # strictly less than or equal, (first arg slt second arg)
+    name::Symbol
+    bbID::Int #basic block number
+    instNum::Int #the number of components of this type (prevents naming conflicts)
+
+    input1Type::DataType
+    input2Type::DataType
+    output1Type::DataType
+
+    delay::Float32 #timed value
+    latency::Int #cycles
+    II::Int #from what I've seen - always 1
+
+    predComps::Vector{Int} #input components (array positions)
+    succComps::Vector{Int} #output component (array position)
+end
+
+mutable struct add_int <: AbstractAdder #add_op
     name::Symbol
     bbID::Int #basic block number
     instNum::Int #the number of components of this type (prevents naming conflicts)
@@ -279,6 +297,23 @@ mutable struct add_int <: AbstractSub #add_op
 
     delay::Float32 #timed value - 1.693
     latency::Int #cycles - 0
+    II::Int #from what I've seen - always 1
+
+    predComps::Vector{Int} #input components (array positions)
+    succComps::Vector{Int} #output component (array position)
+end
+
+mutable struct sdiv_int <: AbstractDivider
+    name::Symbol
+    bbID::Int #basic block number
+    instNum::Int #the number of components of this type (prevents naming conflicts)
+
+    input1Type::DataType
+    input2Type::DataType
+    output1Type::DataType
+
+    delay::Float32 #timed value
+    latency::Int #cycles
     II::Int #from what I've seen - always 1
 
     predComps::Vector{Int} #input components (array positions)

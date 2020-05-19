@@ -93,12 +93,16 @@ function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cntrs::Di
         return add_int(:add_, node.bb, inc(inst_cntrs[sub_int]), input1Type, input2Type, node.type, 1.693, 0, 1, predComps, copy(node.dataSuccs)), cnsts
     elseif node.op.name == :slt_int
         return slt_int(:icmp_, node.bb, inc(inst_cntrs[slt_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
+    elseif node.op.name == :sle_int
+        return sle_int(:icmp_, node.bb, inc(inst_cntrs[sle_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
     elseif node.op.name == :(===)
         if input1Type ∈ int_types && input2Type ∈ int_types
-            return eq_int(:icmp_, node.bb, inc(inst_cntrs[slt_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
+            return eq_int(:icmp_, node.bb, inc(inst_cntrs[eq_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
         else
             error("Unsupported comparison of non integers")
         end
+    elseif node.op.name == :checked_sdiv_int
+        sdiv_int(:sdiv_, node.bb, inc(inst_cntrs[sdiv_int]), input1Type, input2Type, node.type, 0.966, 36, 1, predComps, copy(node.dataSuccs)), cnsts
     else
         error("Unsupported operator: ", string(node.op.name))
     end
@@ -928,7 +932,7 @@ function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=:cycle)::ElasticCircuit
     if add_buff == :basic #basic buffer pass, over-eagerly generates buffers
         ec, inst_cntrs = add_buffers_basic!(ec, inst_cntrs)
     elseif add_buff ==:cycle
-        ec, inst_cntrs = add_buffers_basic!(ec, inst_cntrs)
+        ec, inst_cntrs = add_buffers_cycles_only!(ec, inst_cntrs, cdfg.cfg)
     end
 
     #TODO some final validation before returning the ec
@@ -1105,6 +1109,17 @@ function printDOT_cmpt(cmpt::add_int) # "add_14" [type = "Operator", bbID= 6, op
     println(dot_str)
 end
 
+function printDOT_cmpt(cmpt::sdiv_int) # "add_14" [type = "Operator", bbID= 6, op = "add_op", in = "in1:32 in2:32 ", out = "out1:32 ", delay=1.693, latency=0, II=1];
+    dot_str = ""
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
+    dot_str*= "bbID = $(cmpt.bbID), op = \"sdiv_op\", in = \""
+    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
+    dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
+    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8))\", "
+    dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
+    println(dot_str)
+end
+
 function printDOT_cmpt(cmpt::slt_int)
     dot_str = ""
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
@@ -1120,6 +1135,17 @@ function printDOT_cmpt(cmpt::eq_int) #"icmp_9" [type = "Operator", bbID= 5, op =
     dot_str = ""
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
     dot_str*= "bbID = $(cmpt.bbID), op = \"icmp_eq_op\", in = \""
+    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
+    dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
+    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8))\", " #might need to be forced to 1 bit
+    dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
+    println(dot_str)
+end
+
+function printDOT_cmpt(cmpt::sle_int) #"icmp_28" [type = "Operator", bbID= 5, op = "icmp_ult_op", in = "in1:32 in2:32 ", out = "out1:1 ", delay=1.530, latency=0, II=1];
+    dot_str = ""
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
+    dot_str*= "bbID = $(cmpt.bbID), op = \"icmp_ult_op\", in = \""
     dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
     dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
     dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8))\", " #might need to be forced to 1 bit
@@ -1391,6 +1417,23 @@ function printDOT_link(cmpt_idx::Int, cmpt::add_int, cmpts::Vector{AbstractElast
     println(dot_str)
 end
 
+function printDOT_link(cmpt_idx::Int, cmpt::sdiv_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+    dot_str = ""
+    for n in 1:tab_num
+        dot_str *= "\t"
+    end
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
+
+    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
+    if length(idx_arr) > 1
+        error("Connecting twice not supported")
+    end
+
+    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    println(dot_str)
+end
+
 function printDOT_link(cmpt_idx::Int, cmpt::slt_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
     dot_str = ""
     for n in 1:tab_num
@@ -1409,6 +1452,23 @@ function printDOT_link(cmpt_idx::Int, cmpt::slt_int, cmpts::Vector{AbstractElast
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::eq_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+    dot_str = ""
+    for n in 1:tab_num
+        dot_str *= "\t"
+    end
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
+
+    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
+    if length(idx_arr) > 1
+        error("Connecting twice not supported")
+    end
+
+    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    println(dot_str)
+end
+
+function printDOT_link(cmpt_idx::Int, cmpt::sle_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
     dot_str = ""
     for n in 1:tab_num
         dot_str *= "\t"
