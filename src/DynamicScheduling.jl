@@ -1117,6 +1117,18 @@ function printDOT_link(cmpt_idx::Int, cmpt::AbstractElasticComponent, cmpts::Vec
     return dot_str
 end
 
+function get_idx(tgt, list; only_one=true)
+    if only_one #get the only one, fail if there are more
+        idx_arr = findall(isequal(tgt), list)
+        if length(idx_arr) > 1
+            error("Connecting twice not supported")
+        end
+        return idx_arr[1]
+    else
+        return idx_arr = findall(isequal(tgt), list)
+    end
+end
+
 function printDOT_link(cmpt_idx::Int, cmpt::entry, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
     dot_str = ""
     for n in 1:tab_num
@@ -1124,13 +1136,8 @@ function printDOT_link(cmpt_idx::Int, cmpt::entry, cmpts::Vector{AbstractElastic
     end
     dot_str*= "\"$(cmpt.name)$(cmpt.control ? "0" : "")\" -> "
     dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
-
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
-    end
-
-    dot_str*= "[color = \"$(cmpt.control ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    idx = get_idx(cmpt_idx, cmpts[cmpt.succComps[1]].predComps)
+    dot_str*= "[color = \"$(cmpt.control ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx)\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
     return dot_str
 end
 
@@ -1147,11 +1154,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::branch, cmpts::Vector{AbstractElasti
         dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
         dot_str*= "\"$(string(cmpts[br].name, cmpts[br].instNum))\" "
 
-        idx_arr = findall(isequal(cmpt_idx), cmpts[br].predComps) #finds the refs to the current component in the target component
-        if length(idx_arr) > 1
-            error("Connecting twice not supported")
-        end
-
+        idx = get_idx(cmpt_idx, cmpts[br].predComps)
         colour = "red"
         if cmpt.name == :branchC_
             colour = "gold3"
@@ -1159,7 +1162,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::branch, cmpts::Vector{AbstractElasti
             colour = "blue"
         end
 
-        dot_str*= "[color = \"$(colour)\", minlen = 3, from = \"out$(out_num)\", to = \"in$(isa(cmpts[br], mux) ? idx_arr[1]+1 : idx_arr[1])\"];" #minlen seems constant
+        dot_str*= "[color = \"$(colour)\", minlen = 3, from = \"out$(out_num)\", to = \"in$(isa(cmpts[br], mux) ? idx+1 : idx)\"];" #minlen seems constant
         return dot_str
     end
 end
@@ -1173,7 +1176,8 @@ function printDOT_link(cmpt_idx::Int, cmpt::fork, cmpts::Vector{AbstractElasticC
         dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
         dot_str*= "\"$(string(cmpts[succ].name, cmpts[succ].instNum))\" "
 
-        idx_arr = findall(isequal(cmpt_idx), cmpts[succ].predComps) #finds the refs to the current component in the target component
+        #finds the refs to the current component in the target component
+        idx_arr = get_idx(cmpt_idx, cmpts[succ].predComps, only_one=false)
         if length(idx_arr) > 1
             error("Connecting twice not supported")
         elseif length(idx_arr) < 1 && !isa(cmpts[succ], mux)
@@ -1193,7 +1197,8 @@ function printDOT_link(cmpt_idx::Int, cmpt::merge_data, cmpts::Vector{AbstractEl
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
     dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
 
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
+    #finds the refs to the current component in the target component
+    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps)
     if length(idx_arr) > 1
         error("Connecting twice not supported")
     end
@@ -1210,7 +1215,8 @@ function printDOT_link(cmpt_idx::Int, cmpt::merge_ctrl, cmpts::Vector{AbstractEl
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
     dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
 
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
+    #finds the refs to the current component in the target component
+    idx_arr = get_idx(cmpt_idx, cmpts[cmpt.succComps[1]].predComps, only_one=false)
     if length(idx_arr) > 1
         error("Connecting twice not supported")
     elseif length(idx_arr) < 1
@@ -1239,12 +1245,8 @@ function printDOT_link(cmpt_idx::Int, cmpt::mux, cmpts::Vector{AbstractElasticCo
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
     dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
 
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
-    end
-
-    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    idx = get_idx(cmpt_idx, cmpts[cmpt.succComps[1]].predComps)
+    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx)\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
     return dot_str
 end
 
@@ -1260,12 +1262,8 @@ function printDOT_link(cmpt_idx::Int, cmpt::source, cmpts::Vector{AbstractElasti
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
     dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
 
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
-    end
-
-    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    idx = get_idx(cmpt_idx, cmpts[cmpt.succComps[1]].predComps)
+    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx)\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
     return dot_str
 end
 
@@ -1277,12 +1275,8 @@ function printDOT_link(cmpt_idx::Int, cmpt::ECconstant, cmpts::Vector{AbstractEl
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
     dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
 
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
-    end
-
-    dot_str*= "[color = \"$(cmpt.name == :brCst_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    idx = get_idx(cmpt_idx, cmpts[cmpt.succComps[1]].predComps)
+    dot_str*= "[color = \"$(cmpt.name == :brCst_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx)\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
     return dot_str
 end
 
@@ -1294,12 +1288,8 @@ function printDOT_link(cmpt_idx::Int, cmpt::buffer, cmpts::Vector{AbstractElasti
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
     dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
 
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
-    end
-
-    dot_str*= "[color = \"$(cmpt.name == :buffC_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    idx = get_idx(cmpt_idx, cmpts[cmpt.succComps[1]].predComps)
+    dot_str*= "[color = \"$(cmpt.name == :buffC_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx)\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
     return dot_str
 end
 
@@ -1311,144 +1301,41 @@ function printDOT_link(cmpt_idx::Int, cmpt::return_op, cmpts::Vector{AbstractEla
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
     dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
 
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
-    end
-
-    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+    idx = get_idx(cmpt_idx, cmpts[cmpt.succComps[1]].predComps)
+    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx)\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
     return dot_str
 end
 
-function printDOT_link(cmpt_idx::Int, cmpt::mul_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
-    dot_str = ""
-    for n in 1:tab_num
-        dot_str *= "\t"
-    end
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
-    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
+macro add_operator_linkers(op_ts::Symbol...)
+    for op_t in op_ts
+        @eval begin
+            function printDOT_link(cmpt_idx::Int, cmpt::$(op_t), cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+                dot_str = ""
+                for n in 1:tab_num
+                    dot_str *= "\t"
+                end
+                dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+                dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
 
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
+                idx = get_idx(cmpt_idx, cmpts[cmpt.succComps[1]].predComps)
+                dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx)\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
+                return dot_str
+            end
+        end
     end
-
-    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    return dot_str
 end
 
-function printDOT_link(cmpt_idx::Int, cmpt::sub_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
-    dot_str = ""
-    for n in 1:tab_num
-        dot_str *= "\t"
-    end
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
-    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
-
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
-    end
-
-    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    return dot_str
-end
-
-function printDOT_link(cmpt_idx::Int, cmpt::add_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
-    dot_str = ""
-    for n in 1:tab_num
-        dot_str *= "\t"
-    end
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
-    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
-
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
-    end
-
-    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    return dot_str
-end
-
-function printDOT_link(cmpt_idx::Int, cmpt::sdiv_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
-    dot_str = ""
-    for n in 1:tab_num
-        dot_str *= "\t"
-    end
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
-    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
-
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
-    end
-
-    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    return dot_str
-end
-
-function printDOT_link(cmpt_idx::Int, cmpt::slt_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
-    dot_str = ""
-    for n in 1:tab_num
-        dot_str *= "\t"
-    end
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
-    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
-
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
-    end
-
-    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    return dot_str
-end
-
-function printDOT_link(cmpt_idx::Int, cmpt::eq_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
-    dot_str = ""
-    for n in 1:tab_num
-        dot_str *= "\t"
-    end
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
-    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
-
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
-    end
-
-    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    return dot_str
-end
-
-function printDOT_link(cmpt_idx::Int, cmpt::sle_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
-    dot_str = ""
-    for n in 1:tab_num
-        dot_str *= "\t"
-    end
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "s
-    dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
-
-    idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
-    if length(idx_arr) > 1
-        error("Connecting twice not supported")
-    end
-
-    dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    return dot_str
-end
-
-
+@add_operator_linkers mul_int sub_int add_int sdiv_int sle_int slt_int eq_int
 
 ################### EC Printer ######################
-#print(ec), print(io, ec)
+#REPL print is component list (for debugging)
 Base.show(io::IO, ::MIME"text/plain", ec::ElasticCircuit) = begin
     for cmpt in ec.components
         println(io, cmpt)
     end
 end
 
+#print() is the graph print
 Base.show(io::IO, ec::ElasticCircuit) = begin
     #preamble
     println(io, "Digraph G {")
@@ -1488,5 +1375,24 @@ end
 
 #original interactive printing for Juno debugging
 Juno.render(i::Juno.Inline, ec::ElasticCircuit) = Juno.render(i, Juno.defaultrepr(ec))
+
+#################### DOT Flow #######################
+function dot_from_f(@noinline(f), args, build_path)
+        #process function
+        f_tir = code_typed(f, args)[1]
+        f_cdfg = SSATools.get_cdfg(f_tir.first)
+        f_ec = DynamicScheduling.ElasticCircuit(f_cdfg)
+
+        #write folder
+        func_name = string(f)
+        rm("build_path$(func_name)_sim/", force=true, recursive=true)
+        mkpath(build_path * "build/$(func_name)_sim")
+
+        graph_path = build_path * "build/$(func_name)_sim/$(func_name)_graph.dot"
+        dot_f = open(graph_path, "w")
+        print(dot_f, f_ec)
+        close(dot_f)
+        return graph_path
+end
 
 end #DynamicScheduling
