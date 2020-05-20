@@ -28,11 +28,11 @@ end
 counter() = counter(0)
 function inc(ctr::counter)
     ctr.val+=1
-    return ctr.val
+    return ctr.val-1
 end
 function dec(ctr::counter)
     ctr.val-=1
-    return ctr.val
+    return ctr.val-1
 end
 
 function rst(ctr::counter)
