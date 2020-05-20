@@ -1146,8 +1146,8 @@ function printDOT_link(cmpt_idx::Int, cmpt::exit_ctrl, cmpts::Vector{AbstractEla
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::branch, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+    dot_str = ""
     for (out_num, br) in enumerate([cmpt.branchT, cmpt.branchF]) #TODO - may need to sort out adding succ vec for branches, hopefully not
-        dot_str = ""
         for n in 1:tab_num
             dot_str *= "\t"
         end
@@ -1161,15 +1161,15 @@ function printDOT_link(cmpt_idx::Int, cmpt::branch, cmpts::Vector{AbstractElasti
         elseif cmpt.name == :branch_
             colour = "blue"
         end
-
         dot_str*= "[color = \"$(colour)\", minlen = 3, from = \"out$(out_num)\", to = \"in$(isa(cmpts[br], mux) ? idx+1 : idx)\"];" #minlen seems constant
-        return dot_str
+        dot_str*="\n"
     end
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::fork, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
+    dot_str = ""
     for (out_num, succ) in enumerate(cmpt.succComps)
-        dot_str = ""
         for n in 1:tab_num
             dot_str *= "\t"
         end
@@ -1185,8 +1185,9 @@ function printDOT_link(cmpt_idx::Int, cmpt::fork, cmpts::Vector{AbstractElasticC
         end
         colour = (cmpt.name == :forkC_ ? "gold3" : (isa(cmpts[succ], mux) ? "green" : "red"))
         dot_str*= "[color = \"$colour\", from = \"out$(out_num)\", to = \"in$(isa(cmpts[succ], mux) ? "1" : idx_arr[1])\"];"
-        return dot_str
+        dot_str*="\n"
     end
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::merge_data, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1224,10 +1225,9 @@ function printDOT_link(cmpt_idx::Int, cmpt::merge_ctrl, cmpts::Vector{AbstractEl
     end
 
     dot_str*= "[color = \"$(cmpt.name == :phiMC_a ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    return dot_str
+    dot_str*="\n"
 
     #mux condition driver
-    dot_str = ""
     for n in 1:tab_num
         dot_str *= "\t"
     end
