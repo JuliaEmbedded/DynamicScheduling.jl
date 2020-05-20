@@ -312,8 +312,8 @@ mutable struct sdiv_int <: AbstractDivider
     input2Type::DataType
     output1Type::DataType
 
-    delay::Float32 #timed value
-    latency::Int #cycles
+    delay::Float32 #timed value - 0
+    latency::Int #cycles - 36
     II::Int #from what I've seen - always 1
 
     predComps::Vector{Int} #input components (array positions)

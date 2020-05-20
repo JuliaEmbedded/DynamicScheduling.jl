@@ -9,6 +9,7 @@ using SSATools
 using Core.Compiler
 using InteractiveUtils
 using LightGraphs
+using Juno
 
 ################ type includes ######################
 include("EC_types.jl")
@@ -949,7 +950,7 @@ ElasticCircuit(func, args::Tuple) = ElasticCircuit(code_typed(func, args)[1])
 #TODO change from println() to file storage
 ################ component printers ##################
 function printDOT_cmpt(cmpt::AbstractElasticComponent) #template?
-    println(cmpt.name, ": unsupported cmpt printer")
+    return string(cmpt.name, ": unsupported cmpt printer")
 end
 
 function printDOT_cmpt(cmpt::entry)
@@ -958,7 +959,7 @@ function printDOT_cmpt(cmpt::entry)
     dot_str*= "\"$(cmpt.name)$(cmpt.control ? "0" : "")\" [type = \"Entry\", "
     dot_str*= (cmpt.control ? "control = \"true\", " : "")
     dot_str*= "bbID = $(cmpt.bbID), in = \"in1:$typesize\", out = \"out1:$typesize\"];"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_cmpt(cmpt::exit_ctrl)
@@ -969,7 +970,7 @@ function printDOT_cmpt(cmpt::exit_ctrl)
         dot_str*= "in$ip_t_num:$(ip_t.size*8) "
     end
     dot_str*= "\", out = \"out1:$(cmpt.inputTypes[1].size*8)\"];" #still think this op_t pointless, change my mind
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_cmpt(cmpt::branch)
@@ -979,7 +980,7 @@ function printDOT_cmpt(cmpt::branch)
     dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) in2?:1\", "
     dot_str*= "out = \"out1+:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8)) "
     dot_str*= "out2-:$(cmpt.output2Type == Core.Any ? 0 : (cmpt.output2Type.size*8))\"];"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_cmpt(cmpt::fork)
@@ -991,7 +992,7 @@ function printDOT_cmpt(cmpt::fork)
         dot_str*= "out$op_num:$(cmpt.output1Type == Core.Any ? cmpt.bitWidth : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8)) "
     end
     dot_str*= "\"];"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_cmpt(cmpt::merge_data)
@@ -1003,7 +1004,7 @@ function printDOT_cmpt(cmpt::merge_data)
     end
     dot_str*= "\", out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8))\", "
     dot_str*= "delay = $(cmpt.delay)];"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_cmpt(cmpt::merge_ctrl) #"phiC_8" [type = "CntrlMerge", bbID= 4, in = "in1:0 in2:0 ", out = "out1:0 out2?:1", delay=0.166];
@@ -1017,7 +1018,7 @@ function printDOT_cmpt(cmpt::merge_ctrl) #"phiC_8" [type = "CntrlMerge", bbID= 4
     bitWidth = Int64(ceil(log2(length(cmpt.predComps))))
     dot_str*= "out2?:$(bitWidth)\", "
     dot_str*= "delay = $(cmpt.delay)];"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_cmpt(cmpt::mux) #"phi_n5" [type = "Mux", bbID= 4, in = "in1?:1 in2:32 in3:32 ", out = "out1:32", delay=0.366];
@@ -1030,21 +1031,21 @@ function printDOT_cmpt(cmpt::mux) #"phi_n5" [type = "Mux", bbID= 4, in = "in1?:1
     end
     dot_str*= "\", out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8))\", "
     dot_str*= "delay = $(cmpt.delay)];"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_cmpt(cmpt::sink)
     dot_str = ""
     dot_str*= "\"sink_$(cmpt.instNum)\" [type = \"Sink\", "
     dot_str*= "bbID = $(cmpt.bbID), in = \"in1:0\"];" #assuming 0 - may need to include some type info in sink struct
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_cmpt(cmpt::source)
     dot_str = ""
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Source\", "
     dot_str*= "bbID = $(cmpt.bbID), out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type.size*8))\"];" #assuming 0 - may need to include some type info in sink struct
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_cmpt(cmpt::ECconstant) #"cst_0" [type = "Constant", bbID= 3, in = "in1:32", out = "out1:32", value = "0x00000001"];
@@ -1054,7 +1055,7 @@ function printDOT_cmpt(cmpt::ECconstant) #"cst_0" [type = "Constant", bbID= 3, i
     dot_str*="in = \"in1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\", "
     dot_str*="out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\", "
     dot_str*="value = \"0x$(string(cmpt.value, base=16))\"];" #assuming 0 - may need to include some type info in sink struct
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_cmpt(cmpt::buffer) #"buffI_0" [type = "Buffer", bbID= 3, in = "in1:32", out = "out1:32"];
@@ -1063,7 +1064,7 @@ function printDOT_cmpt(cmpt::buffer) #"buffI_0" [type = "Buffer", bbID= 3, in = 
     dot_str*= "bbID = $(cmpt.bbID), "
     dot_str*="in = \"in1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\", "
     dot_str*="out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\"];"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_cmpt(cmpt::return_op)
@@ -1073,85 +1074,37 @@ function printDOT_cmpt(cmpt::return_op)
     dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type == Core.Bool ? 1 : cmpt.input1Type.size*8))\", "
     dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8))\", "
     dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
-    println(dot_str)
+    return dot_str
 end
 
-function printDOT_cmpt(cmpt::mul_int)
-    dot_str = ""
-    dot_str*= "\"mul_$(cmpt.instNum)\" [type = \"Operator\", "
-    dot_str*= "bbID = $(cmpt.bbID), op = \"mul_op\", in = \""
-    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
-    dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
-    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8))\", "
-    dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
-    println(dot_str)
+macro add_operator_printers(op_ts::Symbol...)
+    for op_t in op_ts
+        op = ""
+        if op_t ∈ [:slt_int, :eq_int]
+            op = "icmp_"
+        end
+        if op == [:sle_int]
+            op *= "ult"
+        else
+            op = split(string(op_t), "_")[1]
+        end
+
+        @eval begin
+            function printDOT_cmpt(cmpt::$(op_t))
+                dot_str = ""
+                dot_str*= "\"$(cmpt.name)$(cmpt.instNum)\" [type = \"Operator\", "
+                dot_str*= "bbID = $(cmpt.bbID), op = \"$($op)_op\", in = \""
+                dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
+                dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
+                dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8))\", "
+                dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
+                return dot_str
+            end
+        end
+    end
 end
 
-function printDOT_cmpt(cmpt::sub_int)
-    dot_str = ""
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
-    dot_str*= "bbID = $(cmpt.bbID), op = \"sub_op\", in = \""
-    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
-    dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
-    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8))\", "
-    dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
-    println(dot_str)
-end
-
-function printDOT_cmpt(cmpt::add_int) # "add_14" [type = "Operator", bbID= 6, op = "add_op", in = "in1:32 in2:32 ", out = "out1:32 ", delay=1.693, latency=0, II=1];
-    dot_str = ""
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
-    dot_str*= "bbID = $(cmpt.bbID), op = \"add_op\", in = \""
-    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
-    dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
-    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8))\", "
-    dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
-    println(dot_str)
-end
-
-function printDOT_cmpt(cmpt::sdiv_int) # "add_14" [type = "Operator", bbID= 6, op = "add_op", in = "in1:32 in2:32 ", out = "out1:32 ", delay=1.693, latency=0, II=1];
-    dot_str = ""
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
-    dot_str*= "bbID = $(cmpt.bbID), op = \"sdiv_op\", in = \""
-    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
-    dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
-    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type.size*8))\", "
-    dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
-    println(dot_str)
-end
-
-function printDOT_cmpt(cmpt::slt_int)
-    dot_str = ""
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
-    dot_str*= "bbID = $(cmpt.bbID), op = \"icmp_slt_op\", in = \""
-    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
-    dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
-    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8))\", " #might need to be forced to 1 bit
-    dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
-    println(dot_str)
-end
-
-function printDOT_cmpt(cmpt::eq_int) #"icmp_9" [type = "Operator", bbID= 5, op = "icmp_eq_op", in = "in1:32 in2:32 ", out = "out1:1 ", delay=1.530, latency=0, II=1];
-    dot_str = ""
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
-    dot_str*= "bbID = $(cmpt.bbID), op = \"icmp_eq_op\", in = \""
-    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
-    dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
-    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8))\", " #might need to be forced to 1 bit
-    dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
-    println(dot_str)
-end
-
-function printDOT_cmpt(cmpt::sle_int) #"icmp_28" [type = "Operator", bbID= 5, op = "icmp_ult_op", in = "in1:32 in2:32 ", out = "out1:1 ", delay=1.530, latency=0, II=1];
-    dot_str = ""
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Operator\", "
-    dot_str*= "bbID = $(cmpt.bbID), op = \"icmp_ult_op\", in = \""
-    dot_str*= "in1:$(cmpt.input1Type == Core.Any ? 0 : (cmpt.input1Type.size*8)) "
-    dot_str*= "in2:$(cmpt.input2Type == Core.Any ? 0 : (cmpt.input2Type.size*8))\", "
-    dot_str*= "out = \"out1:$(cmpt.output1Type == Core.Any ? 0 : (cmpt.output1Type == Core.Bool ? 1 : cmpt.output1Type.size*8))\", " #might need to be forced to 1 bit
-    dot_str*= "delay = $(cmpt.delay), latency = $(cmpt.latency), II = $(cmpt.II)];"
-    println(dot_str)
-end
+@add_operator_printers mul_int sub_int add_int sdiv_int sle_int slt_int
 
 ################ link printers #######################
 #TODO fix the colours, these are dictated by the targets as well as shooters - separate helper func for ease
@@ -1160,7 +1113,8 @@ function printDOT_link(cmpt_idx::Int, cmpt::AbstractElasticComponent, cmpts::Vec
     for n in 1:tab_num
         dot_str *= "\t"
     end
-    println(dot_str, cmpt.name, ": unsupported link printer")
+    dot_str*= string(cmpt.name, ": unsupported link printer")
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::entry, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1177,7 +1131,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::entry, cmpts::Vector{AbstractElastic
     end
 
     dot_str*= "[color = \"$(cmpt.control ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::exit_ctrl, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1206,7 +1160,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::branch, cmpts::Vector{AbstractElasti
         end
 
         dot_str*= "[color = \"$(colour)\", minlen = 3, from = \"out$(out_num)\", to = \"in$(isa(cmpts[br], mux) ? idx_arr[1]+1 : idx_arr[1])\"];" #minlen seems constant
-        println(dot_str)
+        return dot_str
     end
 end
 
@@ -1227,7 +1181,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::fork, cmpts::Vector{AbstractElasticC
         end
         colour = (cmpt.name == :forkC_ ? "gold3" : (isa(cmpts[succ], mux) ? "green" : "red"))
         dot_str*= "[color = \"$colour\", from = \"out$(out_num)\", to = \"in$(isa(cmpts[succ], mux) ? "1" : idx_arr[1])\"];"
-        println(dot_str)
+        return dot_str
     end
 end
 
@@ -1245,7 +1199,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::merge_data, cmpts::Vector{AbstractEl
     end
 
     dot_str*= "[color = \"$(cmpt.name == :phiC_a ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::merge_ctrl, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1264,7 +1218,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::merge_ctrl, cmpts::Vector{AbstractEl
     end
 
     dot_str*= "[color = \"$(cmpt.name == :phiMC_a ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 
     #mux condition driver
     dot_str = ""
@@ -1274,7 +1228,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::merge_ctrl, cmpts::Vector{AbstractEl
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
     dot_str*= "\"$(string(cmpts[cmpt.succCtrls[1]].name, cmpts[cmpt.succCtrls[1]].instNum))\" "
     dot_str*= "[color = \"green\", from = \"out2\", to = \"in1\"];$(length(cmpt.succCtrls) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::mux, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1291,7 +1245,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::mux, cmpts::Vector{AbstractElasticCo
     end
 
     dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::sink, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1312,7 +1266,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::source, cmpts::Vector{AbstractElasti
     end
 
     dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::ECconstant, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1329,7 +1283,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::ECconstant, cmpts::Vector{AbstractEl
     end
 
     dot_str*= "[color = \"$(cmpt.name == :brCst_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::buffer, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1346,7 +1300,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::buffer, cmpts::Vector{AbstractElasti
     end
 
     dot_str*= "[color = \"$(cmpt.name == :buffC_ ? "gold3" : "red")\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::return_op, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1363,7 +1317,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::return_op, cmpts::Vector{AbstractEla
     end
 
     dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::mul_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1380,7 +1334,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::mul_int, cmpts::Vector{AbstractElast
     end
 
     dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::sub_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1397,7 +1351,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::sub_int, cmpts::Vector{AbstractElast
     end
 
     dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::add_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1414,7 +1368,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::add_int, cmpts::Vector{AbstractElast
     end
 
     dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::sdiv_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1431,7 +1385,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::sdiv_int, cmpts::Vector{AbstractElas
     end
 
     dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::slt_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1448,7 +1402,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::slt_int, cmpts::Vector{AbstractElast
     end
 
     dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::eq_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1465,7 +1419,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::eq_int, cmpts::Vector{AbstractElasti
     end
 
     dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
 function printDOT_link(cmpt_idx::Int, cmpt::sle_int, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
@@ -1473,7 +1427,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::sle_int, cmpts::Vector{AbstractElast
     for n in 1:tab_num
         dot_str *= "\t"
     end
-    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "
+    dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" -> "s
     dot_str*= "\"$(string(cmpts[cmpt.succComps[1]].name, cmpts[cmpt.succComps[1]].instNum))\" "
 
     idx_arr = findall(isequal(cmpt_idx), cmpts[cmpt.succComps[1]].predComps) #finds the refs to the current component in the target component
@@ -1482,21 +1436,30 @@ function printDOT_link(cmpt_idx::Int, cmpt::sle_int, cmpts::Vector{AbstractElast
     end
 
     dot_str*= "[color = \"red\", from = \"out1\", to = \"in$(idx_arr[1])\"];$(length(cmpt.succComps) > 1 ? "FOR FORKS SAKE" : "")"
-    println(dot_str)
+    return dot_str
 end
 
-################ EC DOT Printer ######################
-function printDOT(ec::ElasticCircuit)
+
+
+################### EC Printer ######################
+#print(ec), print(io, ec)
+Base.show(io::IO, ::MIME"text/plain", ec::ElasticCircuit) = begin
+    for cmpt in ec.components
+        println(io, cmpt)
+    end
+end
+
+Base.show(io::IO, ec::ElasticCircuit) = begin
     #preamble
-    println("Digraph G {")
-    println("\tsplines=spline;")
-    println("//DHLS version: 0.1.1\" [shape = \"none\" pos = \"20,20!\"]")
+    println(io, "Digraph G {")
+    println(io, "\tsplines=spline;")
+    #println(io, "//DHLS version: 0.1.1\" [shape = \"none\" pos = \"20,20!\"]")
 
     bbnode_stmts = [ Int[] for i in ec.bbnodes] # containers to store the statements in a bbnode
     #print the components
     for (cmpt_idx,cmpt) in enumerate(ec.components)
-        print("\t\t")
-        printDOT_cmpt(cmpt)
+        line = "\t\t" * printDOT_cmpt(cmpt)
+        println(io, line)
 
         if cmpt.bbID > 0
             push!(bbnode_stmts[cmpt.bbID], cmpt_idx)
@@ -1508,17 +1471,22 @@ function printDOT(ec::ElasticCircuit)
     #print the directed connections
     tab_num=2
     for (bb_num,bb) in enumerate(bbnode_stmts)
-        println("\tsubgraph cluster_", string(bb_num-1), " {")
-        println("\tcolor = \"darkgreen\";")
-        println("\t\tlabel = \"block", string(bb_num), "\";")
+        println(io, "\tsubgraph cluster_", string(bb_num-1), " {")
+        println(io, "\tcolor = \"darkgreen\";")
+        println(io, "\t\tlabel = \"block", string(bb_num), "\";")
         for cmpt_idx in bb
-            printDOT_link(cmpt_idx, ec.components[cmpt_idx], ec.components, tab_num)
+            line = printDOT_link(cmpt_idx, ec.components[cmpt_idx], ec.components, tab_num)
+            if !isa(line, Nothing)
+                println(io, line)
+            end
         end
-        println("\t}")
+        println(io, "\t}")
     end
-
     #postamble
-    println("}")
+    println(io, "}")
 end
+
+#original interactive printing for Juno debugging
+Juno.render(i::Juno.Inline, ec::ElasticCircuit) = Juno.render(i, Juno.defaultrepr(ec))
 
 end #DynamicScheduling
