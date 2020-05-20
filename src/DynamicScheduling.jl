@@ -1104,7 +1104,7 @@ macro add_operator_printers(op_ts::Symbol...)
     end
 end
 
-@add_operator_printers mul_int sub_int add_int sdiv_int sle_int slt_int
+@add_operator_printers mul_int sub_int add_int sdiv_int sle_int slt_int eq_int
 
 ################ link printers #######################
 #TODO fix the colours, these are dictated by the targets as well as shooters - separate helper func for ease
