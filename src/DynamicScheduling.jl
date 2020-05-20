@@ -1377,7 +1377,8 @@ end
 Juno.render(i::Juno.Inline, ec::ElasticCircuit) = Juno.render(i, Juno.defaultrepr(ec))
 
 #################### DOT Flow #######################
-function dot_from_f(@noinline(f), args, build_path)
+#build_path generates build dir - defaults to current dir
+function dot_from_f(@noinline(f), args; build_path="/")
         #process function
         f_tir = code_typed(f, args)[1]
         f_cdfg = SSATools.get_cdfg(f_tir.first)
@@ -1385,10 +1386,11 @@ function dot_from_f(@noinline(f), args, build_path)
 
         #write folder
         func_name = string(f)
-        rm("build_path$(func_name)_sim/", force=true, recursive=true)
-        mkpath(build_path * "build/$(func_name)_sim")
+        sim_path = build_path * "build/$(func_name)_sim/"
+        rm(sim_path, force=true, recursive=true)
+        mkpath(sim_path)
 
-        graph_path = build_path * "build/$(func_name)_sim/$(func_name)_graph.dot"
+        graph_path = sim_path * "$(func_name)_graph.dot"
         dot_f = open(graph_path, "w")
         print(dot_f, f_ec)
         close(dot_f)
