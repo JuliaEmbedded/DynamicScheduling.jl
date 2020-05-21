@@ -57,6 +57,30 @@ end
 
 get_concrete_types(t::DataType) = get_concrete_types(t, DataType[])
 
+function get_idx(tgt, list; only_one=true)
+    if only_one #get the only one, fail if there are more
+        idx_arr = findall(isequal(tgt), list)
+        if length(idx_arr) > 1
+            error("Connecting twice not supported")
+        end
+        return idx_arr[1]
+    else
+        return idx_arr = findall(isequal(tgt), list)
+    end
+end
+
+function rpl_cmpt_idx!(tgt::Int, rplmt::Int, list::Array{Int64, 1}) #replace tgt in list at the same index
+    tgt_arr = findall(isequal(tgt), list)
+
+    if length(tgt_arr) > 1
+        error("component has too many connections")
+    elseif length(tgt_arr) < 1
+        error("tgt not in list")
+    else
+        list[tgt_arr[1]] = rplmt
+    end
+end
+
 function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cntrs::Dict{DataType, counter}, arg_len::Int, node_len::Int, cnsts::Vector{ECconstant}) #TODO add to Base.convert
     predComps = Int[]
     input1Type=nothing
@@ -93,12 +117,12 @@ function convert_operator(node::SSATools.CDFGNode, node_idx::Int, inst_cntrs::Di
     elseif node.op.name == :add_int
         return add_int(:add_, node.bb, inc(inst_cntrs[sub_int]), input1Type, input2Type, node.type, 1.693, 0, 1, predComps, copy(node.dataSuccs)), cnsts
     elseif node.op.name == :slt_int
-        return slt_int(:icmp_, node.bb, inc(inst_cntrs[slt_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
+        return slt_int(:icmp_slt_, node.bb, inc(inst_cntrs[slt_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
     elseif node.op.name == :sle_int
-        return sle_int(:icmp_, node.bb, inc(inst_cntrs[sle_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
+        return sle_int(:icmp_sle_, node.bb, inc(inst_cntrs[sle_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
     elseif node.op.name == :(===)
         if input1Type ∈ int_types && input2Type ∈ int_types
-            return eq_int(:icmp_, node.bb, inc(inst_cntrs[eq_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
+            return eq_int(:icmp_eq_, node.bb, inc(inst_cntrs[eq_int]), input1Type, input2Type, node.type, 1.530, 0, 1, predComps, copy(node.dataSuccs)), cnsts
         else
             error("Unsupported comparison of non integers")
         end
@@ -251,7 +275,6 @@ function add_controls!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
     end
 
     ec, inst_cntrs = connect_mux_merge!(ec, inst_cntrs, MC_idxs)
-
     return ec, inst_cntrs
 end
 
@@ -404,15 +427,15 @@ function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter}, cfg)
         end
     end
 
+    #remove redundant connections
     for (cmpt_idx, cmpt) in enumerate(ec.components)
-        #println(cmpt)
         if isa(cmpt, branch)
             #ignore
         else
             for succ in cmpt.succComps[1:end] #WARNING I have no idea why I need to be explicit about this array
                 #println("cmpt_idx: ", cmpt_idx, " succ: ", succ, " succ_bb: ", ec.components[succ].bbID)
                 if ec.components[succ].bbID ∉ ec.bbnodes[cmpt.bbID]["ctrlSuccs"] && cmpt.bbID != ec.components[succ].bbID
-                    #yeet that out
+                    #remove connections between non-adjacent BBs - if successor isn't adjacent and their not in the same BB
                     filter!(rem->rem != succ, cmpt.succComps)
 
                     if isa(ec.components[succ], merge_data) || isa(ec.components[succ], mux) #This could be a very long list
@@ -425,8 +448,9 @@ function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter}, cfg)
                         filter!(rem->rem != cmpt_idx, ec.components[succ].predComps)
                     end
                 else
-                    #add the relevant phi nodes to the liveouts for branching later
-                    if isa(cmpt, merge_data) && (ec.components[succ].bbID != cmpt.bbID || isa(ec.components[succ], merge_data))
+                    if isa(cmpt, merge_data) && #TODO more efficient but possibly less robust, could make a separate pass
+                        (ec.components[succ].bbID != cmpt.bbID || typeof(ec.components[succ]) ∈ [merge_data, mux, placeholder])
+                        #add the relevant phi nodes to the liveouts for branching later
                         union!(ec.bbnodes[cmpt.bbID]["liveouts"], [cmpt_idx])
                         union!(bbnodes_cp[cmpt.bbID]["liveouts"], [cmpt_idx-length(plhdr_idxs)])
                     end
@@ -446,7 +470,7 @@ function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter}, cfg)
     if debug_flag
         println("##DEBUG3##")
         for (phi_idx, phi) in zip(phinodes[1], phinodes[2])
-            println(phi_idx, " - ", phi)
+            println(phi_idx, " - ", ec.components[phi_idx])
         end
     end
 
@@ -482,6 +506,21 @@ function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter}, cfg)
             end
         end
     end
+
+    if debug_flag
+        println("##DEBUG4##")
+        for (cmpt_idx, cmpt) in enumerate(ec.components)
+            if typeof(cmpt) ∈ [mux, merge_ctrl, merge_data]
+                println(cmpt_idx, " : ", cmpt)
+            end
+        end
+    end
+    if debug_flag
+        println("##DEBUG5##")
+        for (lo1, lo2, cnt) in zip(ec.bbnodes, bbnodes_cp, 1:10)
+            println(lo1["liveouts"], " : ", lo2["liveouts"])
+        end
+    end
     ec.bbnodes = bbnodes_cp #resets this to original(no placeholders) plus phi-based alterations
     return ec, inst_cntrs
 end
@@ -504,7 +543,7 @@ function add_branches!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
                     error("last component is not a branch: ", goto_cmpt)
                 end
 
-                push!(ec.components, ECconstant(:brCst_, bb_num, inc(inst_cntrs[ECconstant]), true, Core.Bool, Int[0], Int[]))
+                push!(ec.components, ECconstant(:brCst_, bb_num, inc(inst_cntrs[ECconstant]), true, Core.Bool, Int[0], Int[length(ec.components)+2]))
                 sel_line_pred = length(ec.components)
                 #push!(constants, ECconstant(:cst_, bb_num, inc(inst_cntrs[ECconstant]), true, Core.Bool, Int[0], Int[]))
                 inc(inst_cntrs[Any])
@@ -523,40 +562,81 @@ function add_branches!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
             end
 
             for cmpt_idx in bb["liveouts"]
-                #ASSUMPTION - need a branch per variable
-                branch_idx_dec1 = length(ec.components)
-                input1Type = (isa(ec.components[cmpt_idx], ECconstant) ? ec.components[cmpt_idx].type : ec.components[cmpt_idx].output1Type)
-                branchT = 0
-                branchF = 0
+                branches = [[[],[]], [[],[]]] #[true[tgt[], idx[]], false[tgt[], idx[]]]
                 for (bb_succ) in bb["ctrlSuccs"] #ASSUMPTION - bbs max out branching to two bbs
                     #look through the bb_succ phi nodes to see if the cmpt_idx(liveout) is the same as a pred
                     for tgt_stmt in ec.bbnodes[bb_succ]["stmt_idx"]
-                        pred_list = findall(isequal(cmpt_idx), ec.components[tgt_stmt].predComps)
-                        if length(pred_list) <= 0
-                            #cmpt not targeting here
-                        elseif length(pred_list) == 1
+                        pred = findall(isequal(cmpt_idx), ec.components[tgt_stmt].predComps)
+                        if length(pred) == 1
                             if !(isa(ec.components[tgt_stmt], merge_data) || isa(ec.components[tgt_stmt], mux))
                                 error("should only be applying to phi nodes")
                             end
-
-                            (bb_succ == bb_num+1 ? branchT = tgt_stmt : branchF = tgt_stmt) #select the correct branch for the tgt
-                            ec.components[tgt_stmt].predComps[pred_list[1]] = branch_idx_dec1+1 #set tgt pred as branch
-
-                            #remove tgt_stmt from succ of live out (cmpt_idx)
-                            #println("succs: ", ec.components[cmpt_idx].succComps, "tgt: ", tgt_stmt)
-                            filter!(rem->rem != tgt_stmt, ec.components[cmpt_idx].succComps)
-
-                            #add the branch to the live out succs
-                            union!(ec.components[cmpt_idx].succComps, [branch_idx_dec1+1])
-                        else
-                            error("multi targets for one component")
+                            if length(bb["ctrlSuccs"]) == 1
+                                push!(branches[1][1], tgt_stmt) #branchT = tgt_stmt
+                                push!(branches[1][2], pred[1])
+                                push!(branches[2][1], 0)
+                                push!(branches[2][2], 0)
+                            else
+                                if bb_succ == bb_num+1
+                                    push!(branches[1][1], tgt_stmt)
+                                    push!(branches[1][2], pred[1])
+                                else
+                                    push!(branches[2][1], tgt_stmt) #select the correct branch for the tgt
+                                    push!(branches[2][2], pred[1])
+                                end
+                            end
+                        elseif length(pred) > 1
+                            error("two connections to the same node")
                         end
                     end
                 end
-                push!(ec.components, branch(:branch_, bb_num, inc(inst_cntrs[branch]), input1Type, input1Type, input1Type, Int[cmpt_idx, sel_line_pred], branchT, branchF))
-                inc(inst_cntrs[Any])
-                #update sel line succ
-                union!(ec.components[sel_line_pred].succComps, [length(ec.components)])
+                missing_zeros = length(branches[1][1]) - length(branches[2][1])
+                br = (missing_zeros < 0)
+                if missing_zeros > 0
+                    append!(branches[2][1], zeros(Int, abs(missing_zeros)))
+                    append!(branches[2][2], zeros(Int, abs(missing_zeros)))
+                elseif missing_zeros < 0
+                    append!(branches[1][1], zeros(Int, abs(missing_zeros)))
+                    append!(branches[1][2], zeros(Int, abs(missing_zeros)))
+                end
+                println(cmpt_idx, " : ", branches)
+                #add the accumulated branches
+                input1Type = (isa(ec.components[cmpt_idx], ECconstant) ?
+                                ec.components[cmpt_idx].type :
+                                ec.components[cmpt_idx].output1Type)
+                for br_num in 1:length(branches[1][1])
+                    #ASSUMPTION - need a branch per usage in phis
+                    branch_idx = length(ec.components)+1
+                    tgt_stmtT = branches[1][1][br_num]
+                    tgt_stmtF = branches[2][1][br_num]
+                    stmt_idxT = branches[1][2][br_num]
+                    stmt_idxF = branches[2][2][br_num]
+
+                    if tgt_stmtT!=0 && stmt_idxT!=0
+                        #set tgt pred as branch
+                        ec.components[tgt_stmtT].predComps[stmt_idxT] = branch_idx
+                    end
+                    if tgt_stmtF!=0 && stmt_idxF!=0
+                        ec.components[tgt_stmtF].predComps[stmt_idxF] = branch_idx
+                    end
+                    #rpl tgt_stmt from succ of live out (cmpt_idx)
+                    filter!(rem->rem∉[tgt_stmtT, tgt_stmtF], ec.components[cmpt_idx].succComps)
+                    union!(ec.components[cmpt_idx].succComps, [branch_idx])
+
+                    push!(ec.components, branch(:branch_,
+                        bb_num,
+                        inc(inst_cntrs[branch]),
+                        input1Type,
+                        input1Type,
+                        input1Type,
+                        Int[cmpt_idx, sel_line_pred],
+                        tgt_stmtT,
+                        tgt_stmtF))
+
+                    inc(inst_cntrs[Any])
+                    #update sel line succ
+                    union!(ec.components[sel_line_pred].succComps, [length(ec.components)])
+                end
             end
         end
     end
@@ -581,7 +661,12 @@ function add_forks!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
                 push!(fork_succs, succ)
                 #filter!(rem->rem != succ, cmpt.succComps) #remove succ from cmpt succ
                 #filter!(rem->rem!=cmpt_idx, ec.components[succ].predComps)
-                rpl_idx = findall(isequal(cmpt_idx), ec.components[succ].predComps)[1]
+                rpl_idx_list = findall(isequal(cmpt_idx), ec.components[succ].predComps)
+                if length(rpl_idx_list) == 0
+                    println(cmpt_idx, " - ", succ, " - ", cmpt)
+                    error()
+                end
+                rpl_idx= rpl_idx_list[1]
                 ec.components[succ].predComps[rpl_idx] = fork_idx #replace cmpt from succ preds
             end
 
@@ -822,7 +907,7 @@ function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=:cycle)::ElasticCircuit
             else
                 println("Returning nothing is valid")
             end
-            op_tmp = return_op(:ret_, node.bb, inst_cntrs[return_op].val+1, input1Type, output1Type, 0.0, 0, 1, predComps, Int[]) #successor left as 0 (undefined) add exit later
+            op_tmp = return_op(:ret_, node.bb, inc(inst_cntrs[return_op]), input1Type, output1Type, 0.0, 0, 1, predComps, Int[]) #successor left as 0 (undefined) add exit later
         elseif node.op == :gotoifnot
             #add placeholder component to maintain index linking - TODO add a pass that removes these index links or ignore them in printing
             #op_tmp = placeholder(:gottoifnot_, node.bb, copy(node.dataPreds[1]), copy(node.dataSuccs) ) # this will lose constants or function arguments
@@ -923,7 +1008,9 @@ function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=:cycle)::ElasticCircuit
 
     #run the ec passes in the right order, logic passes
     ec, inst_cntrs = add_phis!(ec, inst_cntrs, cdfg.cfg)
+    #return ec
     ec, inst_cntrs = add_branches!(ec, inst_cntrs)
+    #return ec
     ec, inst_cntrs = add_controls!(ec, inst_cntrs)
     #simple passes
     ec, inst_cntrs = add_forks!(ec, inst_cntrs)
@@ -937,6 +1024,20 @@ function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=:cycle)::ElasticCircuit
     end
 
     #TODO some final validation before returning the ec
+    #check all inputs to mux and merge_data and merge_ctrl are branches
+    for cmpt in ec.components
+        if typeof(cmpt) ∈ [mux, merge_data, merge_ctrl]
+            for pred in cmpt.predComps
+                if !isa(ec.components[pred], branch)
+                    error("EC Check: phi pred:$(pred) branch fail - ", cmpt)
+                end
+            end
+        elseif isa(cmpt, branch)
+            if cmpt.branchT == 0
+                error("Constant driven branches should default to true - ", cmpt)
+            end
+        end
+    end
     return ec
 end
 
@@ -1117,18 +1218,6 @@ function printDOT_link(cmpt_idx::Int, cmpt::AbstractElasticComponent, cmpts::Vec
     return dot_str
 end
 
-function get_idx(tgt, list; only_one=true)
-    if only_one #get the only one, fail if there are more
-        idx_arr = findall(isequal(tgt), list)
-        if length(idx_arr) > 1
-            error("Connecting twice not supported")
-        end
-        return idx_arr[1]
-    else
-        return idx_arr = findall(isequal(tgt), list)
-    end
-end
-
 function printDOT_link(cmpt_idx::Int, cmpt::entry, cmpts::Vector{AbstractElasticComponent}, tab_num::Int)
     dot_str = ""
     for n in 1:tab_num
@@ -1162,7 +1251,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::branch, cmpts::Vector{AbstractElasti
             colour = "blue"
         end
         dot_str*= "[color = \"$(colour)\", minlen = 3, from = \"out$(out_num)\", to = \"in$(isa(cmpts[br], mux) ? idx+1 : idx)\"];" #minlen seems constant
-        dot_str*="\n"
+        dot_str*= (out_num == 2 ? "" : "\n")
     end
     return dot_str
 end
@@ -1185,7 +1274,7 @@ function printDOT_link(cmpt_idx::Int, cmpt::fork, cmpts::Vector{AbstractElasticC
         end
         colour = (cmpt.name == :forkC_ ? "gold3" : (isa(cmpts[succ], mux) ? "green" : "red"))
         dot_str*= "[color = \"$colour\", from = \"out$(out_num)\", to = \"in$(isa(cmpts[succ], mux) ? "1" : idx_arr[1])\"];"
-        dot_str*="\n"
+        dot_str*= (out_num == length(cmpt.succComps) ? "" : "\n")
     end
     return dot_str
 end
