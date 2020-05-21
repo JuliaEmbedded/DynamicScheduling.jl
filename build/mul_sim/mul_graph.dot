@@ -1,0 +1,23 @@
+Digraph G {
+	splines=spline;
+		"mul_0" [type = "Operator", bbID = 1, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
+		"mul_1" [type = "Operator", bbID = 1, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
+		"ret_0" [type = "Operator", bbID = 1, op = "ret_op", in = "in1:32", out = "out1:32", delay = 0.0, latency = 0, II = 1];
+		"a" [type = "Entry", bbID = 1, in = "in1:32", out = "out1:32"];
+		"b" [type = "Entry", bbID = 1, in = "in1:32", out = "out1:32"];
+		"c" [type = "Entry", bbID = 1, in = "in1:32", out = "out1:32"];
+		"end_0" [type = "Exit", bbID = 0, in = "in1:32 ", out = "out1:32"];
+		"start_0" [type = "Entry", control = "true", bbID = 1, in = "in1:0", out = "out1:0"];
+		"sink_0" [type = "Sink", bbID = 0, in = "in1:0"];
+	subgraph cluster_0 {
+	color = "darkgreen";
+		label = "block1";
+		"mul_0" -> "mul_1" [color = "red", from = "out1", to = "in1"];
+		"mul_1" -> "ret_0" [color = "red", from = "out1", to = "in1"];
+		"ret_0" -> "end_0" [color = "red", from = "out1", to = "in1"];
+		"a" -> "mul_0" [color = "red", from = "out1", to = "in1"];
+		"b" -> "mul_0" [color = "red", from = "out1", to = "in2"];
+		"c" -> "mul_1" [color = "red", from = "out1", to = "in2"];
+		"start_0" -> "sink_0" [color = "gold3", from = "out1", to = "in1"];
+	}
+}
