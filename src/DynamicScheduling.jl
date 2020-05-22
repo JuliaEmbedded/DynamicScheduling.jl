@@ -1138,14 +1138,14 @@ end
 function printDOT_cmpt(cmpt::sink)
     dot_str = ""
     dot_str*= "\"sink_$(cmpt.instNum)\" [type = \"Sink\", "
-    dot_str*= "bbID = $(cmpt.bbID), in = \"in1:0\"];" #assuming 0 - may need to include some type info in sink struct
+    dot_str*= "bbID = $(cmpt.bbID), in = \"in1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\"];"
     return dot_str
 end
 
 function printDOT_cmpt(cmpt::source)
     dot_str = ""
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Source\", "
-    dot_str*= "bbID = $(cmpt.bbID), out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type.size*8))\"];" #assuming 0 - may need to include some type info in sink struct
+    dot_str*= "bbID = $(cmpt.bbID), out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\"];"
     return dot_str
 end
 
