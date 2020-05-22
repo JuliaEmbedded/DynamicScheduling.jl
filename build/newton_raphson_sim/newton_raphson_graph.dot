@@ -5,14 +5,14 @@ Digraph G {
 		"phi_1" [type = "Mux", bbID = 2, in = "in1?:1 in2:32 in3:32 ", out = "out1:32", delay = 0.366];
 		"phi_2" [type = "Mux", bbID = 2, in = "in1?:1 in2:32 in3:32 ", out = "out1:32", delay = 0.366];
 		"phi_3" [type = "Mux", bbID = 2, in = "in1?:1 in2:32 in3:32 ", out = "out1:32", delay = 0.366];
-		"icmp_slt_0" [type = "Operator", bbID = 2, op = "slt_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
+		"icmp_slt_0" [type = "Operator", bbID = 2, op = "icmp_slt_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
 		"branchC_1" [type = "Branch", bbID = 2, in = "in1:0 in2?:1", out = "out1+:0 out2-:0"];
 		"mul_0" [type = "Operator", bbID = 3, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
 		"mul_1" [type = "Operator", bbID = 3, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
 		"mul_2" [type = "Operator", bbID = 3, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
 		"sub_0" [type = "Operator", bbID = 3, op = "sub_op", in = "in1:32 in2:32", out = "out1:32", delay = 1.693, latency = 0, II = 1];
 		"add_1" [type = "Operator", bbID = 3, op = "add_op", in = "in1:32 in2:32", out = "out1:32", delay = 1.693, latency = 0, II = 1];
-		"icmp_slt_1" [type = "Operator", bbID = 3, op = "slt_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
+		"icmp_slt_1" [type = "Operator", bbID = 3, op = "icmp_slt_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
 		"branchC_2" [type = "Branch", bbID = 3, in = "in1:0 in2?:1", out = "out1+:0 out2-:0"];
 		"branchC_3" [type = "Branch", bbID = 4, in = "in1:0 in2?:1", out = "out1+:0 out2-:0"];
 		"branchC_4" [type = "Branch", bbID = 5, in = "in1:0 in2?:1", out = "out1+:0 out2-:0"];
@@ -25,7 +25,7 @@ Digraph G {
 		"mul_4" [type = "Operator", bbID = 6, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
 		"sub_5" [type = "Operator", bbID = 6, op = "sub_op", in = "in1:32 in2:32", out = "out1:32", delay = 1.693, latency = 0, II = 1];
 		"mul_5" [type = "Operator", bbID = 6, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
-		"icmp_sle_0" [type = "Operator", bbID = 6, op = "sle_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
+		"icmp_sle_0" [type = "Operator", bbID = 6, op = "icmp_ult_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
 		"branchC_5" [type = "Branch", bbID = 6, in = "in1:0 in2?:1", out = "out1+:0 out2-:0"];
 		"sub_6" [type = "Operator", bbID = 7, op = "sub_op", in = "in1:32 in2:32", out = "out1:32", delay = 1.693, latency = 0, II = 1];
 		"sdiv_0" [type = "Operator", bbID = 7, op = "sdiv_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.966, latency = 36, II = 1];

@@ -1,11 +1,11 @@
 Digraph G {
 	splines=spline;
 		"sub_0" [type = "Operator", bbID = 1, op = "sub_op", in = "in1:32 in2:32", out = "out1:32", delay = 1.693, latency = 0, II = 1];
-		"icmp_slt_0" [type = "Operator", bbID = 1, op = "slt_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
+		"icmp_slt_0" [type = "Operator", bbID = 1, op = "icmp_slt_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
 		"branchC_0" [type = "Branch", bbID = 1, in = "in1:0 in2?:1", out = "out1+:0 out2-:0"];
 		"mul_0" [type = "Operator", bbID = 2, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
 		"ret_0" [type = "Operator", bbID = 2, op = "ret_op", in = "in1:32", out = "out1:32", delay = 0.0, latency = 0, II = 1];
-		"icmp_slt_1" [type = "Operator", bbID = 3, op = "slt_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
+		"icmp_slt_1" [type = "Operator", bbID = 3, op = "icmp_slt_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
 		"branchC_1" [type = "Branch", bbID = 3, in = "in1:0 in2?:1", out = "out1+:0 out2-:0"];
 		"mul_1" [type = "Operator", bbID = 4, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
 		"ret_1" [type = "Operator", bbID = 4, op = "ret_op", in = "in1:32", out = "out1:32", delay = 0.0, latency = 0, II = 1];

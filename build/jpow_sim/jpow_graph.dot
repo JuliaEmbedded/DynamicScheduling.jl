@@ -3,7 +3,7 @@ Digraph G {
 		"branchC_0" [type = "Branch", bbID = 1, in = "in1:0 in2?:1", out = "out1+:0 out2-:0"];
 		"phi_0" [type = "Mux", bbID = 2, in = "in1?:1 in2:32 in3:32 ", out = "out1:32", delay = 0.366];
 		"phi_1" [type = "Mux", bbID = 2, in = "in1?:1 in2:32 in3:32 ", out = "out1:32", delay = 0.366];
-		"icmp_slt_0" [type = "Operator", bbID = 2, op = "slt_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
+		"icmp_slt_0" [type = "Operator", bbID = 2, op = "icmp_slt_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
 		"branchC_1" [type = "Branch", bbID = 2, in = "in1:0 in2?:1", out = "out1+:0 out2-:0"];
 		"sub_0" [type = "Operator", bbID = 3, op = "sub_op", in = "in1:32 in2:32", out = "out1:32", delay = 1.693, latency = 0, II = 1];
 		"mul_0" [type = "Operator", bbID = 3, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
