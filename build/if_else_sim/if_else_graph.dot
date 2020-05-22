@@ -39,8 +39,8 @@ Digraph G {
 		"fork_2" [type = "Fork", bbID = 1, in = "in1:32", out = "out1:32 out2:32 out3:32 "];
 		"fork_3" [type = "Fork", bbID = 1, in = "in1:32", out = "out1:32 out2:32 out3:32 "];
 		"fork_4" [type = "Fork", bbID = 3, in = "in1:32", out = "out1:32 out2:32 "];
-		"sink_3" [type = "Sink", bbID = 1, in = "in1:0"];
-		"sink_4" [type = "Sink", bbID = 3, in = "in1:0"];
+		"sink_3" [type = "Sink", bbID = 1, in = "in1:32"];
+		"sink_4" [type = "Sink", bbID = 3, in = "in1:32"];
 	subgraph cluster_0 {
 	color = "darkgreen";
 		label = "block1";
