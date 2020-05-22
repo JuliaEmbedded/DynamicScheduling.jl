@@ -599,7 +599,7 @@ function add_branches!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
                     append!(branches[1][1], zeros(Int, abs(missing_zeros)))
                     append!(branches[1][2], zeros(Int, abs(missing_zeros)))
                 end
-                println(cmpt_idx, " : ", branches)
+                #println(cmpt_idx, " : ", branches)
                 #add the accumulated branches
                 input1Type = (isa(ec.components[cmpt_idx], ECconstant) ?
                                 ec.components[cmpt_idx].type :
