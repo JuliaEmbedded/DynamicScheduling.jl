@@ -599,7 +599,7 @@ function add_branches!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
                     append!(branches[1][1], zeros(Int, abs(missing_zeros)))
                     append!(branches[1][2], zeros(Int, abs(missing_zeros)))
                 end
-                println(cmpt_idx, " : ", branches)
+                #println(cmpt_idx, " : ", branches)
                 #add the accumulated branches
                 input1Type = (isa(ec.components[cmpt_idx], ECconstant) ?
                                 ec.components[cmpt_idx].type :
@@ -1181,13 +1181,13 @@ end
 macro add_operator_printers(op_ts::Symbol...)
     for op_t in op_ts
         op = ""
-        if op_t ∈ [:slt_int, :eq_int]
+        if op_t ∈ [:slt_int, :eq_int, :sle_int]
             op = "icmp_"
         end
-        if op == [:sle_int]
+        if op_t == :sle_int
             op *= "ult"
         else
-            op = split(string(op_t), "_")[1]
+            op *= split(string(op_t), "_")[1]
         end
 
         @eval begin
