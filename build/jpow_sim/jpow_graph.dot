@@ -125,11 +125,11 @@ Digraph G {
 		"mul_0" -> "branch_9" [color = "red", from = "out1", to = "in1"];
 		"branchC_2" -> "sink_2" [color = "gold3", minlen = 3, from = "out1", to = "in1"];
 		"branchC_2" -> "phiMC_a0" [color = "gold3", minlen = 3, from = "out2", to = "in2"];
-		"cst_3" -> "sub_0" [color = "red", from = "out1", to = "in1"];
+		"cst_3" -> "sub_0" [color = "red", from = "out1", to = "in2"];
 		"brCst_4" -> "fork_3" [color = "gold3", from = "out1", to = "in1"];
 		"phi_a1" -> "fork_4" [color = "red", from = "out1", to = "in1"];
-		"phi_a2" -> "mul_0" [color = "red", from = "out1", to = "in2"];
-		"phi_a3" -> "sub_0" [color = "red", from = "out1", to = "in2"];
+		"phi_a2" -> "mul_0" [color = "red", from = "out1", to = "in1"];
+		"phi_a3" -> "sub_0" [color = "red", from = "out1", to = "in1"];
 		"branch_9" -> "phi_0" [color = "blue", minlen = 3, from = "out1", to = "in3"];
 		"branch_9" -> "sink_8" [color = "blue", minlen = 3, from = "out2", to = "in1"];
 		"branch_10" -> "phi_1" [color = "blue", minlen = 3, from = "out1", to = "in3"];
@@ -141,7 +141,7 @@ Digraph G {
 		"fork_3" -> "branch_9" [color = "red", from = "out2", to = "in2"];
 		"fork_3" -> "branch_10" [color = "red", from = "out3", to = "in2"];
 		"fork_3" -> "branch_11" [color = "red", from = "out4", to = "in2"];
-		"fork_4" -> "mul_0" [color = "red", from = "out1", to = "in1"];
+		"fork_4" -> "mul_0" [color = "red", from = "out1", to = "in2"];
 		"fork_4" -> "branch_11" [color = "red", from = "out2", to = "in1"];
 		"forkC_7" -> "branchC_2" [color = "gold3", from = "out1", to = "in1"];
 		"forkC_7" -> "brCst_4" [color = "gold3", from = "out2", to = "in1"];
