@@ -387,11 +387,13 @@ function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter}, cfg)
     for (phi_idx, phi) in zip(phinodes[1], phinodes[2])
         phi_def_idx = phi.predComps[1] #origin of the data phi node is transferring
         for (tgt_idx, tgt) in enumerate(ec.components)
-            if (tgt.bbID == phi.bbID) && (tgt.bbID != ec.components[phi_def_idx].bbID) && (tgt != phi) && phi_def_idx ∈ tgt.predComps
-                filter!(rem->rem != tgt_idx, ec.components[phi_def_idx].succComps) #remove the tgt/cmpt from succs of original component def
-                filter!(rem->rem != phi_def_idx, tgt.predComps) #remove the original component def from preds of tgt/cmpt
+            if (tgt.bbID == phi.bbID) &&
+                (tgt.bbID != ec.components[phi_def_idx].bbID) &&
+                (tgt != phi) && phi_def_idx ∈ tgt.predComps
+                #remove the tgt/cmpt from succs of original component def
+                filter!(rem->rem != tgt_idx, ec.components[phi_def_idx].succComps)
+                rpl_cmpt_idx!(phi_def_idx, phi_idx, tgt.predComps)
                 #put the phi nodes in between the connections
-                push!(tgt.predComps, phi_idx) #add the phi as a pred to tgt/cmpt
                 push!(phi.succComps, tgt_idx) #add the tgt/cmpt as a succ of phi
             end
         end
@@ -481,11 +483,9 @@ function add_phis!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter}, cfg)
             pred_bb = ec.components[pred].bbID
             succ_bb = ec.components[succ].bbID
             #update the pred with the succ
-            succ_idx = findall(isequal(plhdr), ec.components[pred].succComps)[1]
-            ec.components[pred].succComps[succ_idx] = succ
+            rpl_cmpt_idx!(plhdr, succ, ec.components[pred].succComps)
             #update the succ with the pred
-            pred_idx = findall(isequal(plhdr), ec.components[succ].predComps)[1]
-            ec.components[succ].predComps[pred_idx] = pred
+            rpl_cmpt_idx!(plhdr, pred, ec.components[succ].predComps)
         end
 
         #remove the placeholders
@@ -1005,7 +1005,7 @@ function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=:cycle)::ElasticCircuit
 
     #initial ec without control, branches, phis, forks, sources, sinks etc.
     ec = ElasticCircuit(bbnodes, cmpts)
-
+    #return ec
     #run the ec passes in the right order, logic passes
     ec, inst_cntrs = add_phis!(ec, inst_cntrs, cdfg.cfg)
     #return ec
@@ -1138,14 +1138,14 @@ end
 function printDOT_cmpt(cmpt::sink)
     dot_str = ""
     dot_str*= "\"sink_$(cmpt.instNum)\" [type = \"Sink\", "
-    dot_str*= "bbID = $(cmpt.bbID), in = \"in1:0\"];" #assuming 0 - may need to include some type info in sink struct
+    dot_str*= "bbID = $(cmpt.bbID), in = \"in1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\"];"
     return dot_str
 end
 
 function printDOT_cmpt(cmpt::source)
     dot_str = ""
     dot_str*= "\"$(string(cmpt.name, cmpt.instNum))\" [type = \"Source\", "
-    dot_str*= "bbID = $(cmpt.bbID), out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type.size*8))\"];" #assuming 0 - may need to include some type info in sink struct
+    dot_str*= "bbID = $(cmpt.bbID), out = \"out1:$(cmpt.type == Core.Any ? 0 : (cmpt.type == Core.Bool ? 1 : cmpt.type.size*8))\"];"
     return dot_str
 end
 
@@ -1419,8 +1419,8 @@ end
 ################### EC Printer ######################
 #REPL print is component list (for debugging)
 Base.show(io::IO, ::MIME"text/plain", ec::ElasticCircuit) = begin
-    for cmpt in ec.components
-        println(io, cmpt)
+    for (cmpt_idx, cmpt) in enumerate(ec.components)
+        println(io, cmpt_idx, ": ",cmpt)
     end
 end
 
