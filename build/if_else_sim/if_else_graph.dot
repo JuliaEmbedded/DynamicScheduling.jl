@@ -73,8 +73,8 @@ Digraph G {
 		label = "block2";
 		"mul_0" -> "ret_0" [color = "red", from = "out1", to = "in1"];
 		"ret_0" -> "end_0" [color = "red", from = "out1", to = "in1"];
-		"phi_a0" -> "mul_0" [color = "red", from = "out1", to = "in1"];
-		"phi_a1" -> "mul_0" [color = "red", from = "out1", to = "in2"];
+		"phi_a0" -> "mul_0" [color = "red", from = "out1", to = "in2"];
+		"phi_a1" -> "mul_0" [color = "red", from = "out1", to = "in1"];
 		"phiC_a8" -> "sink_0" [color = "gold3", from = "out1", to = "in1"];
 	}
 	subgraph cluster_2 {
@@ -84,7 +84,7 @@ Digraph G {
 		"branchC_1" -> "phiC_a10" [color = "gold3", minlen = 3, from = "out1", to = "in1"];
 		"branchC_1" -> "phiC_a11" [color = "gold3", minlen = 3, from = "out2", to = "in1"];
 		"phi_a2" -> "fork_4" [color = "red", from = "out1", to = "in1"];
-		"phi_a3" -> "icmp_slt_1" [color = "red", from = "out1", to = "in2"];
+		"phi_a3" -> "icmp_slt_1" [color = "red", from = "out1", to = "in1"];
 		"phi_a4" -> "branch_6" [color = "red", from = "out1", to = "in1"];
 		"branch_5" -> "phi_a5" [color = "blue", minlen = 3, from = "out1", to = "in1"];
 		"branch_5" -> "sink_4" [color = "blue", minlen = 3, from = "out2", to = "in1"];
@@ -94,7 +94,7 @@ Digraph G {
 		"fork_1" -> "branchC_1" [color = "red", from = "out1", to = "in2"];
 		"fork_1" -> "branch_5" [color = "red", from = "out2", to = "in2"];
 		"fork_1" -> "branch_6" [color = "red", from = "out3", to = "in2"];
-		"fork_4" -> "icmp_slt_1" [color = "red", from = "out1", to = "in1"];
+		"fork_4" -> "icmp_slt_1" [color = "red", from = "out1", to = "in2"];
 		"fork_4" -> "branch_5" [color = "red", from = "out2", to = "in1"];
 	}
 	subgraph cluster_3 {
@@ -102,8 +102,8 @@ Digraph G {
 		label = "block4";
 		"mul_1" -> "ret_1" [color = "red", from = "out1", to = "in1"];
 		"ret_1" -> "end_0" [color = "red", from = "out1", to = "in2"];
-		"phi_a5" -> "mul_1" [color = "red", from = "out1", to = "in1"];
-		"phi_a6" -> "mul_1" [color = "red", from = "out1", to = "in2"];
+		"phi_a5" -> "mul_1" [color = "red", from = "out1", to = "in2"];
+		"phi_a6" -> "mul_1" [color = "red", from = "out1", to = "in1"];
 		"phiC_a10" -> "sink_1" [color = "gold3", from = "out1", to = "in1"];
 	}
 	subgraph cluster_4 {
