@@ -118,6 +118,10 @@ architecture behavioral of mul_graph is
 	signal sink_0_pValidArray_0 : std_logic;
 	signal sink_0_readyArray_0 : std_logic;
 
+    -- manual changes
+    signal endReadyArr : std_logic_vector(-1 downto 0);
+    signal endValidArr : std_logic_vector(-1 downto 0);
+
 begin
 
 
@@ -267,7 +271,10 @@ port map (
 	readyArray(0) => end_0_readyArray_0,
 	dataOutArray(0) => end_0_dataOutArray_0,
 	validArray(0) => end_0_validArray_0,
-	nReadyArray(0) => end_0_nReadyArray_0
+	nReadyArray(0) => end_0_nReadyArray_0,
+    -- manual changes
+    eValidArray => endValidArr,
+    eReadyArray => endReadyArr
 );
 
 start_0: entity work.start_node(arch) generic map (1,1,1,1)

@@ -27,6 +27,9 @@ port (
 end;
 
 architecture behavioral of if_else_graph is 
+    -- manual changes
+    signal endReadyArr : std_logic_vector(-1 downto 0);
+    signal endValidArr : std_logic_vector(-1 downto 0);
 
 	signal sub_0_clk : std_logic;
 	signal sub_0_rst : std_logic;
@@ -1141,7 +1144,10 @@ port map (
 	readyArray(2) => end_0_readyArray_2,
 	dataOutArray(0) => end_0_dataOutArray_0,
 	validArray(0) => end_0_validArray_0,
-	nReadyArray(0) => end_0_nReadyArray_0
+	nReadyArray(0) => end_0_nReadyArray_0,
+    -- manual changes
+    eValidArray => endValidArr,
+    eReadyArray => endReadyArr
 );
 
 start_0: entity work.start_node(arch) generic map (1,1,1,1)

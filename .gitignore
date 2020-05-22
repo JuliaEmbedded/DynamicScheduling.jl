@@ -1,2 +1,6 @@
 /build/*/work/
 *.mpf
+*.wlf
+*.cr
+*.mti
+/build/*/transcript*
