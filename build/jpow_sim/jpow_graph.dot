@@ -61,6 +61,9 @@ Digraph G {
 		"buff_1" [type = "Buffer", bbID = 2, in = "in1:32", out = "out1:32"];
 		"buff_2" [type = "Buffer", bbID = 2, in = "in1:32", out = "out1:32"];
 		"buffC_3" [type = "Buffer", bbID = 2, in = "in1:0", out = "out1:0"];
+
+        "specBuff" [type = "Buffer", bbID = 2, in = "in1:1", out = "out1:1"];
+
 	subgraph cluster_0 {
 	color = "darkgreen";
 		label = "block1";
@@ -102,7 +105,8 @@ Digraph G {
 		"branch_8" -> "phi_a1" [color = "blue", minlen = 3, from = "out1", to = "in1"];
 		"branch_8" -> "sink_7" [color = "blue", minlen = 3, from = "out2", to = "in1"];
 		"phiMC_a0" -> "buffC_3" [color = "gold3", from = "out1", to = "in1"];
-		"phiMC_a0" -> "forkMC_6" [color = "green", from = "out2", to = "in1"];
+		"phiMC_a0" -> "specBuff" [color = "green", from = "out2", to = "in1"];
+		"specBuff" -> "forkMC_6" [color = "green", from = "out1", to = "in1"];
 		"fork_0" -> "icmp_slt_0" [color = "red", from = "out1", to = "in2"];
 		"fork_0" -> "branch_6" [color = "red", from = "out2", to = "in1"];
 		"fork_1" -> "branchC_1" [color = "red", from = "out1", to = "in2"];
