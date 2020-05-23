@@ -1468,22 +1468,22 @@ Juno.render(i::Juno.Inline, ec::ElasticCircuit) = Juno.render(i, Juno.defaultrep
 #################### DOT Flow #######################
 #build_path generates build dir - defaults to current dir
 function dot_from_f(@noinline(f), args; build_path="/")
-        #process function
-        f_tir = code_typed(f, args)[1]
-        f_cdfg = SSATools.get_cdfg(f_tir.first)
-        f_ec = DynamicScheduling.ElasticCircuit(f_cdfg)
+    #process function
+    f_tir = code_typed(f, args)[1]
+    f_cdfg = SSATools.get_cdfg(f_tir.first)
+    f_ec = DynamicScheduling.ElasticCircuit(f_cdfg)
 
-        #write folder
-        func_name = string(f)
-        sim_path = build_path * "build/$(func_name)_sim/"
-        rm(sim_path, force=true, recursive=true)
-        mkpath(sim_path)
+    #write folder
+    func_name = string(f)
+    sim_path = build_path * "build/$(func_name)_sim/"
+    graph_path = sim_path * "$(func_name)_graph.dot"
 
-        graph_path = sim_path * "$(func_name)_graph.dot"
-        dot_f = open(graph_path, "w")
-        print(dot_f, f_ec)
-        close(dot_f)
-        return graph_path
+    rm(graph_path, force=true)
+    mkpath(sim_path)
+    dot_f = open(graph_path, "w")
+    print(dot_f, f_ec)
+    close(dot_f)
+    return graph_path
 end
 
 end #DynamicScheduling
