@@ -230,7 +230,7 @@ function add_controls!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
                         push!(predBBs, predbb)
 
                         #update those ctrl branches with the bT and bF successors
-                        if (predbb+1) == bb_num #if it's true, it goes straight through
+                        if (predbb+1) == bb_num || length(ec.bbnodes[predbb]["ctrlSuccs"]) == 1 #if it's true, it goes straight through
                             ec.components[ec.bbnodes[predbb]["stmt_idx"][end]].branchT = ctrl_idx
                         else
                             ec.components[ec.bbnodes[predbb]["stmt_idx"][end]].branchF = ctrl_idx
@@ -1012,6 +1012,7 @@ function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=:cycle)::ElasticCircuit
     ec, inst_cntrs = add_branches!(ec, inst_cntrs)
     #return ec
     ec, inst_cntrs = add_controls!(ec, inst_cntrs)
+    #return ec
     #simple passes
     ec, inst_cntrs = add_forks!(ec, inst_cntrs)
     ec, inst_cntrs = add_sinks!(ec, inst_cntrs)
@@ -1033,7 +1034,8 @@ function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=:cycle)::ElasticCircuit
                 end
             end
         elseif isa(cmpt, branch)
-            if cmpt.branchT == 0
+            if cmpt.name == :branchC_ &&
+                isa(ec.components[cmpt.branchT], sink)
                 error("Constant driven branches should default to true - ", cmpt)
             end
         end
@@ -1048,9 +1050,8 @@ ElasticCircuit(ci_pair::Pair) = ElasticCircuit(ci_pair.first)
 ElasticCircuit(func, args::Tuple) = ElasticCircuit(code_typed(func, args)[1])
 
 ################ DOT printers ########################
-#TODO change from println() to file storage
 ################ component printers ##################
-function printDOT_cmpt(cmpt::AbstractElasticComponent) #template?
+function printDOT_cmpt(cmpt::AbstractElasticComponent) #template
     return string(cmpt.name, ": unsupported cmpt printer")
 end
 
@@ -1450,13 +1451,17 @@ Base.show(io::IO, ec::ElasticCircuit) = begin
         println(io, "\tsubgraph cluster_", string(bb_num-1), " {")
         println(io, "\tcolor = \"darkgreen\";")
         println(io, "\t\tlabel = \"block", string(bb_num), "\";")
+        branches = Core.String[]
         for cmpt_idx in bb
             line = printDOT_link(cmpt_idx, ec.components[cmpt_idx], ec.components, tab_num)
-            if !isa(line, Nothing)
+            if isa(ec.components[cmpt_idx], branch)
+                push!(branches, line)
+            elseif !isa(line, Nothing)
                 println(io, line)
             end
         end
         println(io, "\t}")
+        [println(io, br) for br in branches]
     end
     #postamble
     println(io, "}")
@@ -1468,22 +1473,22 @@ Juno.render(i::Juno.Inline, ec::ElasticCircuit) = Juno.render(i, Juno.defaultrep
 #################### DOT Flow #######################
 #build_path generates build dir - defaults to current dir
 function dot_from_f(@noinline(f), args; build_path="/")
-        #process function
-        f_tir = code_typed(f, args)[1]
-        f_cdfg = SSATools.get_cdfg(f_tir.first)
-        f_ec = DynamicScheduling.ElasticCircuit(f_cdfg)
+    #process function
+    f_tir = code_typed(f, args)[1]
+    f_cdfg = SSATools.get_cdfg(f_tir.first)
+    f_ec = DynamicScheduling.ElasticCircuit(f_cdfg)
 
-        #write folder
-        func_name = string(f)
-        sim_path = build_path * "build/$(func_name)_sim/"
-        rm(sim_path, force=true, recursive=true)
-        mkpath(sim_path)
+    #write folder
+    func_name = string(f)
+    sim_path = build_path * "build/$(func_name)_sim/"
+    graph_path = sim_path * "$(func_name)_graph.dot"
 
-        graph_path = sim_path * "$(func_name)_graph.dot"
-        dot_f = open(graph_path, "w")
-        print(dot_f, f_ec)
-        close(dot_f)
-        return graph_path
+    rm(graph_path, force=true)
+    mkpath(sim_path)
+    dot_f = open(graph_path, "w")
+    print(dot_f, f_ec)
+    close(dot_f)
+    return graph_path
 end
 
 end #DynamicScheduling
