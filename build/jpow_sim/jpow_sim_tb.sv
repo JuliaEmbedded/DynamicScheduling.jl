@@ -1,4 +1,4 @@
-module if_else_sim_tb_top();
+module jpow_sim_tb_top();
 
 logic clk, rst;
 
@@ -12,20 +12,26 @@ logic end_valid;
 logic [31:0] end_out;
 
 //dut arg inputs
-logic [31:0] a_din;
-logic [31:0] b_din;
-logic a_valid_in, b_valid_in; //not used in dut
+logic [31:0] x_din;
+logic [31:0] n_din;
+logic x_valid_in, n_valid_in; //not used in dut
 
 //dut arg outputs
-logic a_ready_out, b_ready_out; //not used in dut
+logic x_ready_out, n_ready_out; //not used in dut
 
-int a,b, res;
+int x,n, res;
 int test_total;
 int dut_res;
 
 function int gen_result;
-    input int a, b;
-    automatic int k = a - b;
+    input int x, n;
+    automatic int r = 1;
+    while (n > 0) begin
+        n--;
+        r = r*x;
+    end
+    return r;
+/*    automatic int k = a - b;
     if (a > b) begin
         k = k * a;
         return k;
@@ -34,6 +40,7 @@ function int gen_result;
         return k;
     end else
         return k;
+*/
 endfunction
 
 //tb program
@@ -42,23 +49,23 @@ initial begin
     rst = 1;
     #15 end_ready = 1;
     //targeted
-    a=5;
-    b=5;
-    res = gen_result(a, b);
+    x=2;
+    n=3;
+    res = gen_result(x, n);
     rst = 0;
     
     //drive dut
     @(posedge clk);
-    $display("Test %d: a: %d, b: %d", -1, a, b);
-    a_din = a;
-    b_din = b;
+    $display("Test %d: x: %d, n: %d", -1, x, n);
+    x_din = x;
+    n_din = n;
     start_in = 1;
     start_valid = 1;
     
     @(posedge clk); //wait two cycles for dut to get info
     @(posedge clk);
-    a_din = 0;
-    b_din = 0;
+    x_din = 0;
+    n_din = 0;
     start_in = 0;
     start_valid = 0;
     
@@ -71,25 +78,25 @@ initial begin
     rst = 1;
     @(posedge clk);
      
-    test_total = 100;
+    test_total = 10;
     for (int test_it=0; test_it < test_total; test_it++) begin
-        a=$random();
-        b=$random();
-        res = gen_result(a, b);
+        x=$urandom_range(1,200);
+        n=$urandom_range(1,20);
+        res = gen_result(x, n);
         rst = 0;
         
         //drive dut
         @(posedge clk);
-        $display("Test %d: a: %d, b: %d", test_it, a, b);
-        a_din = a;
-        b_din = b;
+        $display("Test %d: x: %d, n: %d", test_it, x, n);
+        x_din = x;
+        n_din = n;
         start_in = 1;
         start_valid = 1;
         
         @(posedge clk); //wait two cycles for dut to get info
         @(posedge clk);
-        //a_din = 0;
-        //b_din = 0;
+//        x_din = 0;
+//        n_din = 0;
         start_in = 0;
         start_valid = 0;
         
@@ -116,7 +123,7 @@ end
 always #5 clk = ~clk;
 
 
-if_else_graph ie1(
+jpow_graph jp1(
     .clk        (clk        ), 
     .rst        (rst        ), 
     .start_in   (start_in   ),
@@ -125,12 +132,13 @@ if_else_graph ie1(
     .end_out    (end_out    ),
     .end_valid  (end_valid  ),
     .end_ready  (end_ready  ),
-    .a_din      (a_din      ),
-    .a_valid_in (a_valid_in ),
-    .a_ready_out(a_ready_out),
-    .b_din      (b_din      ),
-    .b_valid_in (b_valid_in ),
-    .b_ready_out(b_ready_out)
+    .x_din      (x_din      ),
+    .x_valid_in (x_valid_in ),
+    .x_ready_out(x_ready_out),
+    .n_din      (n_din      ),
+    .n_valid_in (n_valid_in ),
+    .n_ready_out(n_ready_out)
 );
 
 endmodule
+
