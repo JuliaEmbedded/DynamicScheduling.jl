@@ -1034,7 +1034,7 @@ function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=:cycle)::ElasticCircuit
                 end
             end
         elseif isa(cmpt, branch)
-            if isa(ec.components[cmpt.predComps[2]], ECconstant) &&
+            if cmpt.name == :branchC_ &&
                 isa(ec.components[cmpt.branchT], sink)
                 error("Constant driven branches should default to true - ", cmpt)
             end
@@ -1050,9 +1050,8 @@ ElasticCircuit(ci_pair::Pair) = ElasticCircuit(ci_pair.first)
 ElasticCircuit(func, args::Tuple) = ElasticCircuit(code_typed(func, args)[1])
 
 ################ DOT printers ########################
-#TODO change from println() to file storage
 ################ component printers ##################
-function printDOT_cmpt(cmpt::AbstractElasticComponent) #template?
+function printDOT_cmpt(cmpt::AbstractElasticComponent) #template
     return string(cmpt.name, ": unsupported cmpt printer")
 end
 
@@ -1452,13 +1451,17 @@ Base.show(io::IO, ec::ElasticCircuit) = begin
         println(io, "\tsubgraph cluster_", string(bb_num-1), " {")
         println(io, "\tcolor = \"darkgreen\";")
         println(io, "\t\tlabel = \"block", string(bb_num), "\";")
+        branches = Core.String[]
         for cmpt_idx in bb
             line = printDOT_link(cmpt_idx, ec.components[cmpt_idx], ec.components, tab_num)
-            if !isa(line, Nothing)
+            if isa(ec.components[cmpt_idx], branch)
+                push!(branches, line)
+            elseif !isa(line, Nothing)
                 println(io, line)
             end
         end
         println(io, "\t}")
+        [println(io, br) for br in branches]
     end
     #postamble
     println(io, "}")
