@@ -25,7 +25,7 @@ Digraph G {
 		"mul_4" [type = "Operator", bbID = 6, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
 		"sub_5" [type = "Operator", bbID = 6, op = "sub_op", in = "in1:32 in2:32", out = "out1:32", delay = 1.693, latency = 0, II = 1];
 		"mul_5" [type = "Operator", bbID = 6, op = "mul_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.0, latency = 4, II = 1];
-		"icmp_sle_0" [type = "Operator", bbID = 6, op = "icmp_ult_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
+		"icmp_sle_0" [type = "Operator", bbID = 6, op = "icmp_sle_op", in = "in1:32 in2:32", out = "out1:1", delay = 1.53, latency = 0, II = 1];
 		"branchC_5" [type = "Branch", bbID = 6, in = "in1:0 in2?:1", out = "out1+:0 out2-:0"];
 		"sub_6" [type = "Operator", bbID = 7, op = "sub_op", in = "in1:32 in2:32", out = "out1:32", delay = 1.693, latency = 0, II = 1];
 		"sdiv_0" [type = "Operator", bbID = 7, op = "sdiv_op", in = "in1:32 in2:32", out = "out1:32", delay = 0.966, latency = 36, II = 1];
@@ -41,7 +41,7 @@ Digraph G {
 		"xh" [type = "Entry", bbID = 1, in = "in1:32", out = "out1:32"];
 		"brCst_0" [type = "Constant", bbID = 1, in = "in1:1", out = "out1:1", value = "0x1"];
 		"cst_1" [type = "Constant", bbID = 1, in = "in1:32", out = "out1:32", value = "0x0"];
-		"cst_2" [type = "Constant", bbID = 2, in = "in1:32", out = "out1:32", value = "0x12c"];
+		"cst_2" [type = "Constant", bbID = 2, in = "in1:32", out = "out1:32", value = "0xa"];
 		"cst_3" [type = "Constant", bbID = 3, in = "in1:32", out = "out1:32", value = "0x4"];
 		"cst_4" [type = "Constant", bbID = 3, in = "in1:32", out = "out1:32", value = "0x2"];
 		"cst_5" [type = "Constant", bbID = 3, in = "in1:32", out = "out1:32", value = "0x64"];
