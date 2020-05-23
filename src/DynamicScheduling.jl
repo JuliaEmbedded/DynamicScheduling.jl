@@ -1185,11 +1185,11 @@ macro add_operator_printers(op_ts::Symbol...)
         if op_t ∈ [:slt_int, :eq_int, :sle_int]
             op = "icmp_"
         end
-        if op_t == :sle_int
-            op *= "ult"
-        else
-            op *= split(string(op_t), "_")[1]
-        end
+        #if op_t == :sle_int
+        #    op *= "ult"
+        #else
+        op *= split(string(op_t), "_")[1]
+        #end
 
         @eval begin
             function printDOT_cmpt(cmpt::$(op_t))
