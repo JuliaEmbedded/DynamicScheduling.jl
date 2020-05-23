@@ -230,7 +230,7 @@ function add_controls!(ec::ElasticCircuit, inst_cntrs::Dict{DataType, counter})
                         push!(predBBs, predbb)
 
                         #update those ctrl branches with the bT and bF successors
-                        if (predbb+1) == bb_num #if it's true, it goes straight through
+                        if (predbb+1) == bb_num || length(ec.bbnodes[predbb]["ctrlSuccs"]) == 1 #if it's true, it goes straight through
                             ec.components[ec.bbnodes[predbb]["stmt_idx"][end]].branchT = ctrl_idx
                         else
                             ec.components[ec.bbnodes[predbb]["stmt_idx"][end]].branchF = ctrl_idx
@@ -1012,6 +1012,7 @@ function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=:cycle)::ElasticCircuit
     ec, inst_cntrs = add_branches!(ec, inst_cntrs)
     #return ec
     ec, inst_cntrs = add_controls!(ec, inst_cntrs)
+    #return ec
     #simple passes
     ec, inst_cntrs = add_forks!(ec, inst_cntrs)
     ec, inst_cntrs = add_sinks!(ec, inst_cntrs)
@@ -1033,7 +1034,8 @@ function ElasticCircuit(cdfg::SSATools.CDFG; add_buff=:cycle)::ElasticCircuit
                 end
             end
         elseif isa(cmpt, branch)
-            if cmpt.branchT == 0
+            if isa(ec.components[cmpt.predComps[2]], ECconstant) &&
+                isa(ec.components[cmpt.branchT], sink)
                 error("Constant driven branches should default to true - ", cmpt)
             end
         end
