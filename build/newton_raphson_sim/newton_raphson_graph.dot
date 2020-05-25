@@ -41,7 +41,7 @@ Digraph G {
 		"xh" [type = "Entry", bbID = 1, in = "in1:32", out = "out1:32"];
 		"brCst_0" [type = "Constant", bbID = 1, in = "in1:1", out = "out1:1", value = "0x1"];
 		"cst_1" [type = "Constant", bbID = 1, in = "in1:32", out = "out1:32", value = "0x0"];
-		"cst_2" [type = "Constant", bbID = 2, in = "in1:32", out = "out1:32", value = "0xa"];
+		"cst_2" [type = "Constant", bbID = 2, in = "in1:32", out = "out1:32", value = "0x12c"];
 		"cst_3" [type = "Constant", bbID = 3, in = "in1:32", out = "out1:32", value = "0x4"];
 		"cst_4" [type = "Constant", bbID = 3, in = "in1:32", out = "out1:32", value = "0x2"];
 		"cst_5" [type = "Constant", bbID = 3, in = "in1:32", out = "out1:32", value = "0x64"];
