@@ -3,4 +3,6 @@
 *.wlf
 *.cr
 *.mti
-/build/*/transcript*
+*transcript*
+/build/*/comp_sim_libs
+/build/*/viv_sim

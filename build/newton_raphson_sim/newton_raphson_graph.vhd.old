@@ -4153,10 +4153,9 @@ begin
 	source_1_rst <= rst;
 	cst_2_pValidArray_0 <= source_1_validArray_0;
 	source_1_nReadyArray_0 <= cst_2_readyArray_0;
-	--cst_2_dataInArray_0 <= "00000000000000000000000000001010";
-    cst_2_dataInArray_0 <= "00000000000000000000000100101100";
-	
-    source_2_clk <= clk;
+	cst_2_dataInArray_0 <= "00000000000000000000000000001010";
+
+	source_2_clk <= clk;
 	source_2_rst <= rst;
 	cst_3_pValidArray_0 <= source_2_validArray_0;
 	source_2_nReadyArray_0 <= cst_3_readyArray_0;
